@@ -1,0 +1,77 @@
+name: Validacao de Scripts SQL
+
+on:
+  pull_request:
+    branches: [ develop, main ]
+  push:
+    branches: [ develop ]
+
+jobs:
+  test-database:
+    runs-on: ubuntu-latest
+    
+    env:
+      PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: roteamento_db
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U sistemaRoteamento -d roteamento_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Instalar postgresql-client
+        run:  sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Testar 01_esquema.sql (DDL)
+        run: |
+          if [ -s grupoNN/sql/01_esquema.sql ]; then
+            psql \
+              -h localhost \
+              -U sistemaRoteamento \
+              -d roteamento_db \
+              -v ON_ERROR_STOP=1 \
+              -f grupoNN/sql/01_esquema.sql
+          else
+            echo "01_esquema.sql não encontrado ou está vazio."
+            exit 1
+          fi
+
+      - name: Testar 02_carga.sql
+        run: |
+          if [ -s grupoNN/sql/02_carga.sql ]; then
+            psql \
+              -h localhost \
+              -U sistemaRoteamento \
+              -d roteamento_db \
+              -v ON_ERROR_STOP=1 \
+              -f grupoNN/sql/02_carga.sql
+          else
+            echo "02_carga.sql não encontrado ou está vazio."
+            exit 1
+          fi
+
+      - name: Testar 03_verificacao.sql
+        run: |
+          if [ -s grupoNN/sql/03_verificacao.sql ]; then
+            psql \
+              -h localhost \
+              -U sistemaRoteamento \
+              -d roteamento_db \
+              -v ON_ERROR_STOP=1 \
+              -f grupoNN/sql/03_verificacao.sql
+          else
+            echo "03_verificacao.sql não encontrado ou está vazio."
+            exit 1
+          fi
