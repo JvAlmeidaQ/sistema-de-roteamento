@@ -1,6 +1,18 @@
-# Sistema de Roteamento de Pedidos
+# Sistema de Roteamento de Pedidos — DCC060 & DCC061
 
-Repositório de desenvolvimento do trabalho prático de Banco de Dados (DCC060 - 2026.3).
+Projeto integrado unindo o trabalho prático de **Banco de Dados (DCC060)** e as práticas de **Engenharia de Software (DCC061)** — UFJF.
+
+---
+
+## 📑 Governança e Engenharia de Requisitos
+
+Para garantir a qualidade técnica e a rastreabilidade do projeto, consulte os guias oficiais do time:
+
+* 📋 **[Governança, DoR e DoD (PROJECT_MANAGEMENT.md)](./PROJECT_MANAGEMENT.md):** Regras de processo, Definition of Ready, Definition of Done e política de branches.
+* 🗺️ **[Matriz de Rastreabilidade Bidirecional](./docs/es/matriz_rastreabilidade.md):** Vínculo entre Requisitos Funcionais, Regras de Negócio e arquivos de implementação no banco e na aplicação.
+* 📊 **[Quadro de Tarefas e Sprints (GitHub Projects)](https://github.com/users/JvAlmeidaQ/projects/1):** Quadro Kanban de acompanhamento com as datas oficiais de BD e marcos de ES.
+
+---
 
 ## 🛠️ Ambiente Local (Docker)
 
