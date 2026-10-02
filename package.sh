@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-GRUPO_DIR="grupoNN"
+GRUPO_DIR="grupo10"
 OUTPUT_ZIP="${GRUPO_DIR}.zip"
 
 if [ ! -d "$GRUPO_DIR" ]; then
