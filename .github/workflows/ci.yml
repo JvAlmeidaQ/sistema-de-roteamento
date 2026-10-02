@@ -1,10 +1,12 @@
 name: Validacao de Scripts SQL
 
 on:
-  pull_request:
-    branches: [ develop, main ]
-  push:
-    branches: [ develop ]
+  workflow_dispatch: #retirar essa linha e descomentar as de baixo quando chegar o momento da implementação do SQL
+#CI temporariamente desativado enquanto os scripts SQL não estão implementados.
+  # pull_request:
+  #   branches: [ develop, main ]
+  # push:
+  #   branches: [ develop ]
 
 jobs:
   test-database:
