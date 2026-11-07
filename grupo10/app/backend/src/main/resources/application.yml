@@ -1,0 +1,14 @@
+spring:
+  config:
+    # Carrega automaticamente o .env da raiz do repositorio sem precisar exportar variaveis no terminal
+    import: optional:file:../../../.env[.properties],optional:file:.env[.properties]
+  datasource:
+    url: jdbc:postgresql://localhost:5432/roteamento_db
+    username: sistemaRoteamento
+    password: ${POSTGRES_PASSWORD}
+  flyway:
+    locations: classpath:db/migration
+    sql-migration-prefix: ""
+    sql-migration-separator: "_"
+  jooq:
+    sql-dialect: postgres

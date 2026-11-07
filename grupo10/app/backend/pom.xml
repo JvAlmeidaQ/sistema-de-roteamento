@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <!-- use o patch mais recente da linha 3.5.x -->
+        <version>3.5.7</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>br.ufjf.dcc</groupId>
+    <artifactId>roteamento-entregas</artifactId>
+    <version>1.0.0</version>
+    <name>roteamento-entregas</name>
+
+    <properties>
+        <java.version>21</java.version>
+        <db.url>jdbc:postgresql://localhost:5432/roteamento_db</db.url>
+        <db.user>sistemaRoteamento</db.user>
+        <!-- Em CI usa a variavel de ambiente; localmente o properties-maven-plugin sobrescreve lendo o .env da raiz -->
+        <POSTGRES_PASSWORD>${env.POSTGRES_PASSWORD}</POSTGRES_PASSWORD>
+        <!-- pasta dos scripts do edital, relativa ao pom.xml -->
+        <sql.dir>${project.basedir}/../../sql</sql.dir>
+        <migration.dir>${project.build.outputDirectory}/db/migration</migration.dir>
+    </properties>
+
+    <dependencies>
+        <!-- REST + Tomcat embutido (8080); serve também src/main/resources/static -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Bean Validation (@NotNull, @Min...) nos DTOs -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- jOOQ type-safe (traz o DSLContext autoconfigurado) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jooq</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway: migrations aplicadas ao subir a aplicação -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+
+            <!-- 0) Carrega automaticamente o arquivo .env da raiz do repositorio para o Maven -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>properties-maven-plugin</artifactId>
+                <version>1.2.1</version>
+                <executions>
+                    <execution>
+                        <id>carregar-dotenv</id>
+                        <phase>initialize</phase>
+                        <goals><goal>read-project-properties</goal></goals>
+                        <configuration>
+                            <files>
+                                <file>${project.basedir}/../../../.env</file>
+                            </files>
+                            <!-- Nao falha no CI quando o .env nao existe e a senha vem de env.POSTGRES_PASSWORD -->
+                            <quiet>true</quiet>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 1) Copia só 01 e 02 da pasta do edital para o classpath (03 não é migration) -->
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copiar-migrations</id>
+                        <phase>initialize</phase>
+                        <goals><goal>copy-resources</goal></goals>
+                        <configuration>
+                            <outputDirectory>${migration.dir}</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${sql.dir}</directory>
+                                    <includes>
+                                        <include>01_esquema.sql</include>
+                                        <include>02_carga.sql</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 2) Flyway no build: migra o banco antes do jOOQ gerar o código -->
+            <plugin>
+                <groupId>org.flywaydb</groupId>
+                <artifactId>flyway-maven-plugin</artifactId>
+                <version>${flyway.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals><goal>migrate</goal></goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <url>${db.url}</url>
+                    <user>${db.user}</user>
+                    <password>${POSTGRES_PASSWORD}</password>
+                    <locations>
+                        <location>filesystem:${migration.dir}</location>
+                    </locations>
+                    <!-- aceita os nomes do edital: 01_esquema.sql, 02_carga.sql -->
+                    <sqlMigrationPrefix></sqlMigrationPrefix>
+                    <sqlMigrationSeparator>_</sqlMigrationSeparator>
+                </configuration>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>${postgresql.version}</version>
+                    </dependency>
+                    <dependency>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-database-postgresql</artifactId>
+                        <version>${flyway.version}</version>
+                    </dependency>
+                </dependencies>
+            </plugin>
+
+            <!-- 3) jOOQ codegen: lê o esquema já migrado (deve vir DEPOIS do Flyway) -->
+            <plugin>
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq-codegen-maven</artifactId>
+                <version>${jooq.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals><goal>generate</goal></goals>
+                    </execution>
+                </executions>
+                <dependencies>
+                    <dependency>
+                        <groupId>org.postgresql</groupId>
+                        <artifactId>postgresql</artifactId>
+                        <version>${postgresql.version}</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <jdbc>
+                        <driver>org.postgresql.Driver</driver>
+                        <url>${db.url}</url>
+                        <user>${db.user}</user>
+                        <password>${POSTGRES_PASSWORD}</password>
+                    </jdbc>
+                    <generator>
+                        <database>
+                            <name>org.jooq.meta.postgres.PostgresDatabase</name>
+                            <inputSchema>public</inputSchema>
+                            <excludes>flyway_schema_history</excludes>
+                        </database>
+                        <target>
+                            <packageName>br.ufjf.dcc.entregas.jooq</packageName>
+                            <directory>${project.build.directory}/generated-sources/jooq</directory>
+                        </target>
+                    </generator>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>
