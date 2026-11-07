@@ -3,8 +3,12 @@
 Thumbs.db
 
 # Ambientes locais e containers
+target/
 .env
 docker/pgdata/
+
+# Pasta frontend - temporaria até o Marco 3
+frontend
 
 # Artefatos e builds
 *.zip
@@ -12,6 +16,10 @@ dist/
 build/
 __pycache__/
 *.pyc
+
+# Node modules
+node_modules/
+dist/
 
 # IDEs
 .vscode/
