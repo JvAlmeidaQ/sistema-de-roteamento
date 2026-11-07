@@ -1,17 +1,22 @@
 name: Validacao de Scripts SQL
 
 on:
-  workflow_dispatch: #retirar essa linha e descomentar as de baixo quando chegar o momento da implementação do SQL
-#CI temporariamente desativado enquanto os scripts SQL não estão implementados.
-  # pull_request:
-  #   branches: [ develop, main ]
-  # push:
-  #   branches: [ develop ]
+  workflow_dispatch:
+  pull_request:
+    branches: [ develop, main ]
+    paths:
+      - 'grupo10/sql/**'
+      - '.github/workflows/ci.yml'
+  push:
+    branches: [ develop ]
+    paths:
+      - 'grupo10/sql/**'
+      - '.github/workflows/ci.yml'
 
 jobs:
   test-database:
     runs-on: ubuntu-latest
-    
+
     env:
       PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
     services:
@@ -19,7 +24,7 @@ jobs:
         image: postgres:18
         env:
           POSTGRES_DB: roteamento_db
-          POSTGRES_USER: admin
+          POSTGRES_USER: sistemaRoteamento
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
         ports:
           - 5432:5432
@@ -34,17 +39,17 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Instalar postgresql-client
-        run:  sudo apt-get update && sudo apt-get install -y postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
       - name: Testar 01_esquema.sql (DDL)
         run: |
-          if [ -s grupoNN/sql/01_esquema.sql ]; then
+          if [ -s grupo10/sql/01_esquema.sql ]; then
             psql \
               -h localhost \
               -U sistemaRoteamento \
               -d roteamento_db \
               -v ON_ERROR_STOP=1 \
-              -f grupoNN/sql/01_esquema.sql
+              -f grupo10/sql/01_esquema.sql
           else
             echo "01_esquema.sql não encontrado ou está vazio."
             exit 1
@@ -52,13 +57,13 @@ jobs:
 
       - name: Testar 02_carga.sql
         run: |
-          if [ -s grupoNN/sql/02_carga.sql ]; then
+          if [ -s grupo10/sql/02_carga.sql ]; then
             psql \
               -h localhost \
               -U sistemaRoteamento \
               -d roteamento_db \
               -v ON_ERROR_STOP=1 \
-              -f grupoNN/sql/02_carga.sql
+              -f grupo10/sql/02_carga.sql
           else
             echo "02_carga.sql não encontrado ou está vazio."
             exit 1
@@ -66,13 +71,13 @@ jobs:
 
       - name: Testar 03_verificacao.sql
         run: |
-          if [ -s grupoNN/sql/03_verificacao.sql ]; then
+          if [ -s grupo10/sql/03_verificacao.sql ]; then
             psql \
               -h localhost \
               -U sistemaRoteamento \
               -d roteamento_db \
               -v ON_ERROR_STOP=1 \
-              -f grupoNN/sql/03_verificacao.sql
+              -f grupo10/sql/03_verificacao.sql
           else
             echo "03_verificacao.sql não encontrado ou está vazio."
             exit 1

@@ -6,6 +6,10 @@ Thumbs.db
 .env
 docker/pgdata/
 
+# Pastas de dev enquanto não é a hora
+frontend
+backend
+
 # Artefatos e builds
 *.zip
 dist/

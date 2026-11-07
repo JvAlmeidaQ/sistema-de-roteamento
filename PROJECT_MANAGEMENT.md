@@ -6,18 +6,21 @@ Este documento reúne o modelo de trabalho, o cronograma, os critérios de quali
 
 ---
 
-## 1. Cronograma de Entregas
+## 1. Cronograma de Entregas (BD x ES)
 
-| Marco          | Data  | Escopo                                                             |
-| -------------- | ----- | ------------------------------------------------------------------ |
-| **E0** (BD)    | 10/09 | Equipe e tema aprovado                                             |
-| **E1** (BD)    | 24/09 | Requisitos e regras de negócio (Seções 1 e 2)                      |
-| **E2** (BD)    | 16/10 | DER, modelo lógico e normalização (Seção 3)                        |
-| **E3** (BD)    | 06/11 | Consultas em álgebra relacional (Seção 4)                          |
-| **E4** (BD)    | 13/11 | DDL, carga (200k+ linhas) e verificação (Seção 5)                  |
-| **E5** (BD)    | 27/11 | Consultas SQL e visões (Seções 6 e 7.1)                            |
-| **Final** (ES) | 29/11 | Entrega final de Engenharia de Software                            |
-| **E6** (BD)    | 11/12 | Gatilhos, índices e relatório consolidado (Seções 7.2, 7.3, 8 e 9) |
+| Marco            | Data  | Escopo e Antecipações                                                                                                                      |
+| :--------------- | :---- | :----------------------------------------------------------------------------------------------------------------------------------------- |
+| **E0** (BD)      | 10/09 | Equipe e tema aprovado _(Concluído)_                                                                                                       |
+| **E1** (BD)      | 24/09 | Requisitos e regras de negócio (Seções 1 e 2) _(Concluído)_                                                                                |
+| **E2** (BD)      | 16/10 | DER, modelo lógico e normalização (Seção 3) _(Concluído)_                                                                                  |
+| **E3** (BD)      | 08/11 | Consultas em álgebra relacional (Seção 4).                                                                                                 |
+| **E4** (BD)      | 13/11 | DDL, carga (200k+ linhas) e verificação (Seção 5).                                                                                         |
+| **Marco 1** (ES) | 20/11 | **[Antecipa E6]** Gatilhos de limite e imutabilidade. **[ES]** Setup Backend (Spring Boot + jOOQ), Controllers e Services de cada domínio. |
+| **Marco 2** (ES) | 21/11 | **[Antecipa E5]** Consultas SQL e Visões para relatórios. **[ES]** Setup Frontend (React), telas integradas à API e painéis.               |
+| **Marco 3** (ES) | 23/11 | **[ES]** Redação do documento-texto (DOCX) com os 3 temas teóricos e elaboração dos slides (PDF).                                          |
+| **Final** (ES)   | 24/11 | **Entrega Final de ES**. Código-fonte congelado na branch `release/es`, DOCX e Slides submetidos no Classroom.                             |
+| **E5** (BD)      | 29/11 | Consultas SQL e visões (Seções 6 e 7.1). _(Empacotamento do SQL já criado no Marco 2 na branch `release/bd`)_.                             |
+| **E6** (BD)      | 06/12 | Gatilhos, índices e relatório consolidado (Seções 7.2, 7.3, 8 e 9). _(Adição de índices e formatação do PDF final)_.                       |
 
 ---
 

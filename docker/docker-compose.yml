@@ -2,16 +2,17 @@ services:
   db:
     image: postgres:18
     container_name: postgres-dev
+    env_file:
+      - ../.env
     environment:
       POSTGRES_USER: sistemaRoteamento
       POSTGRES_DB: roteamento_db
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-      # Espelha a pasta sql com permissão read-only(ro) para facilitar execuções manuais dentro do container
-      - ../grupoNN/sql:/docker-entrypoint-initdb.d:ro
+      - postgres_data:/var/lib/postgresql
+      # Espelha a pasta grupo10/sql com permissão read-only (ro) para inicialização e testes manuais no container
+      - ../grupo10/sql:/docker-entrypoint-initdb.d:ro
 
 volumes:
   postgres_data:
