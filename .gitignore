@@ -2,6 +2,9 @@
 .DS_Store
 Thumbs.db
 
+# Arquivo de backup
+justificativas.tex
+
 # Ambientes locais e containers
 .env
 docker/pgdata/
