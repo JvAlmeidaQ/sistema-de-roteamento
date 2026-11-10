@@ -12,6 +12,6 @@ fi
 rm -f "$OUTPUT_ZIP"
 
 # Compacta estritamente o diretório grupoNN ignorando arquivos temporários
-zip -r "$OUTPUT_ZIP" "$GRUPO_DIR" -x "*.DS_Store" "*__pycache__*" "*.git*"
+zip -r "$OUTPUT_ZIP" "$GRUPO_DIR" -x "*.DS_Store" "*__pycache__*" "*.git*" "*.tex*"
 
 echo "Pacote gerado com sucesso: $OUTPUT_ZIP"
