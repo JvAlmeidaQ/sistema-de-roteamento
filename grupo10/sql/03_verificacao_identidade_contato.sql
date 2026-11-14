@@ -1,390 +1,439 @@
--- =============================================================================
--- 03_verificacao_identidade_contato.sql — Subdomínio Identidade e Contato (E4)
--- Pré-requisito: 01_esquema_identidade_contato.sql e 02_carga_identidade_contato.sql.
---
--- Cada teste traz: regra (Seção 2), resultado esperado e mensagem literal do SGBD.
--- Os testes de violação rodam dentro de blocos com tratamento de exceção, então o
--- script não para com ON_ERROR_STOP=1. Um teste só "PASSA" se o SGBD recusar a
--- operação com o SQLSTATE e a constraint esperados; se a operação for aceita ou
--- falhar por outro motivo, o script aborta com "FALHOU".
--- Tudo roda numa transação desfeita no fim (ROLLBACK): a carga não é alterada.
---
--- SQLSTATE usados:
---   23514 check_violation        23505 unique_violation
---   23503 foreign_key_violation  23001 restrict_violation (ON DELETE RESTRICT, PG 18)
---   23502 not_null_violation     22P02 invalid_text_representation (ENUM)
--- =============================================================================
+-- =================================================================================
+-- SCRIPT DE VERIFICAÇÃO DE INTEGRIDADE - SUBDOMÍNIO: IDENTIDADE E CONTATO
+-- Arquivo: 03_verificacao_identidade_contato.sql
+-- Objetivo: Comandos de INSERT, UPDATE e DELETE que demonstram o funcionamento
+--           dos controles de integridade criados no DDL
+--           (01_esquema_identidade_contato.sql), a partir da carga
+--           (02_carga_identidade_contato.sql).
+-- =================================================================================
 
-BEGIN;
 
--- -----------------------------------------------------------------------------
--- Parte 1 — Casos válidos: as regras não bloqueiam operações corretas
--- -----------------------------------------------------------------------------
-DO $$
-BEGIN
-    -- Regra: RN10/RR14 — pessoa com nome, CPF de 11 dígitos e e-mail válidos
-    -- Esperado: SUCESSO
-    INSERT INTO pessoa (nome, cpf, email)
-    VALUES ('Pessoa Válida', '12345678909', 'valida@exemplo.com');
 
-    -- Regra: RR14 — telefone fixo só com dígitos (DDD + 8)
-    -- Esperado: SUCESSO
-    INSERT INTO telefone (id_pessoa, numero, tipo)
-    VALUES (2, '3233334444', 'fixo');
+-- ---------------------------------------------------------------------------------
+-- RN10 / RR14: O CPF deve conter exatamente 11 dígitos numéricos.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_pessoa_cpf (CPF com letra).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Teste', '0000000000A', 'teste@exemplo.com');
 
-    -- Regra: ADR-002 — cliente troca o endereço atual por outro endereço DELE
-    -- (cliente 111 usava o trabalho; passa a usar a casa, endereço 111)
-    -- Esperado: SUCESSO
-    UPDATE cliente SET id_endereco_atual = 111 WHERE id_pessoa = 111;
-    IF NOT EXISTS (SELECT 1 FROM cliente
-                   WHERE id_pessoa = 111 AND id_endereco_atual = 111) THEN
-        RAISE EXCEPTION 'FALHOU: troca válida de endereço atual do cliente 111';
-    END IF;
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_cpf"
+-- DETAIL:  Failing row contains (301, Teste, 0000000000A, teste@exemplo.com).
 
-    -- Regra: ADR-002 (MATCH SIMPLE) — endereço atual é opcional (NULL)
-    -- Esperado: SUCESSO
-    UPDATE cliente SET id_endereco_atual = NULL WHERE id_pessoa = 112;
 
-    -- Regra: ADR-003 (sobreposição) — uma pessoa pode acumular papéis
-    -- (pessoa 71, já lojista, passa a ser também entregadora)
-    -- Esperado: SUCESSO
-    INSERT INTO entregador (id_pessoa, tipo_veiculo) VALUES (71, 'bicicleta');
+-- ---------------------------------------------------------------------------------
+-- RN10 / RR14: O CPF deve conter exatamente 11 dígitos numéricos.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_pessoa_cpf (CPF com apenas 10 dígitos).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Teste', '1234567890', 'teste@exemplo.com');
 
-    RAISE NOTICE 'PASSOU: casos válidos (pessoa, telefone, troca e remoção de endereço atual, papel sobreposto)';
-END;
-$$;
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_cpf"
+-- DETAIL:  Failing row contains (302, Teste, 1234567890 , teste@exemplo.com).
 
--- -----------------------------------------------------------------------------
--- Parte 2 — Violações: cada operação deve ser RECUSADA pelo SGBD
--- -----------------------------------------------------------------------------
-DO $$
-DECLARE
-    v_teste     RECORD;
-    v_sqlstate  TEXT;
-    v_restricao TEXT;
-    v_falhou    BOOLEAN;
-BEGIN
-    FOR v_teste IN
-        SELECT * FROM (VALUES
 
-            -- ===================== PESSOA =====================
+-- ---------------------------------------------------------------------------------
+-- RN10: O CPF é único — duas pessoas não podem ter o mesmo CPF.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a unique constraint
+--                     uq_pessoa_cpf (CPF da pessoa 1).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Teste', '00000000001', 'teste@exemplo.com');
 
-            -- Regra: RN10/RR14 — CPF deve ter exatamente 11 dígitos numéricos
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_cpf"
-            (
-                'CPF com letra',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES ('Teste', '0000000000A', 'teste@exemplo.com')$q$,
-                '23514', 'ck_pessoa_cpf'
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uq_pessoa_cpf"
+-- DETAIL:  Key (cpf)=(00000000001) already exists.
 
-            -- Regra: RN10/RR14 — CPF deve ter exatamente 11 dígitos numéricos
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_cpf"
-            (
-                'CPF com 10 dígitos',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES ('Teste', '1234567890', 'teste@exemplo.com')$q$,
-                '23514', 'ck_pessoa_cpf'
-            ),
 
-            -- Regra: RN10 — CPF é único
-            -- Esperado: ERRO (violação de UNIQUE)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "uq_pessoa_cpf"
-            (
-                'CPF repetido (INSERT)',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES ('Teste', '00000000001', 'teste@exemplo.com')$q$,
-                '23505', 'uq_pessoa_cpf'
-            ),
+-- ---------------------------------------------------------------------------------
+-- RN10: O CPF é único (UPDATE inválido).
+-- Resultado esperado: O banco deve rejeitar a alteração, pois viola a unique constraint
+--                     uq_pessoa_cpf (pessoa 1 recebendo o CPF da pessoa 2).
+-- ---------------------------------------------------------------------------------
+UPDATE pessoa
+SET cpf = '00000000002'
+WHERE id_pessoa = 1;
 
-            -- Regra: RN10 — CPF é único, também na alteração
-            -- Esperado: ERRO (violação de UNIQUE)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "uq_pessoa_cpf"
-            (
-                'CPF repetido (UPDATE)',
-                $q$UPDATE pessoa SET cpf = '00000000002' WHERE id_pessoa = 1$q$,
-                '23505', 'uq_pessoa_cpf'
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uq_pessoa_cpf"
+-- DETAIL:  Key (cpf)=(00000000002) already exists.
 
-            -- Regra: e-mail é único
-            -- Esperado: ERRO (violação de UNIQUE)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "uq_pessoa_email"
-            (
-                'E-mail repetido',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES ('Teste', '99999999999', 'pessoa1@exemplo.com')$q$,
-                '23505', 'uq_pessoa_email'
-            ),
 
-            -- Regra: e-mail no formato básico algo@dominio.ext
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_email"
-            (
-                'E-mail sem @',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES ('Teste', '99999999999', 'teste.exemplo.com')$q$,
-                '23514', 'ck_pessoa_email'
-            ),
+-- ---------------------------------------------------------------------------------
+-- Unicidade do e-mail: duas pessoas não podem ter o mesmo e-mail.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a unique constraint
+--                     uq_pessoa_email (e-mail da pessoa 1).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Teste', '99999999999', 'pessoa1@exemplo.com');
 
-            -- Regra: nome obrigatório e não vazio
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_nome"
-            (
-                'Nome só com espaços',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES ('   ', '99999999999', 'teste@exemplo.com')$q$,
-                '23514', 'ck_pessoa_nome'
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uq_pessoa_email"
+-- DETAIL:  Key (email)=(pessoa1@exemplo.com) already exists.
 
-            -- Regra: nome obrigatório
-            -- Esperado: ERRO (violação de NOT NULL)
-            -- Mensagem do SGBD: ERROR:  null value in column "nome" of relation "pessoa" violates not-null constraint
-            (
-                'Nome nulo',
-                $q$INSERT INTO pessoa (nome, cpf, email) VALUES (NULL, '99999999999', 'teste@exemplo.com')$q$,
-                '23502', NULL
-            ),
 
-            -- ===================== ENDERECO =====================
+-- ---------------------------------------------------------------------------------
+-- Formato do e-mail: deve seguir o padrão básico algo@dominio.ext.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_pessoa_email (e-mail sem @).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Teste', '99999999999', 'teste.exemplo.com');
 
-            -- Regra: RR14 — CEP com exatamente 8 dígitos numéricos
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_cep"
-            (
-                'CEP com hífen e 7 dígitos',
-                $q$INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado) VALUES ('Rua Teste', '1', 'Centro', '36000-00', 'Juiz de Fora', 'MG')$q$,
-                '23514', 'ck_endereco_cep'
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_email"
+-- DETAIL:  Failing row contains (305, Teste, 99999999999, teste.exemplo.com).
 
-            -- Regra: RR14 — UF com 2 letras maiúsculas
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_estado"
-            (
-                'UF em minúsculas',
-                $q$INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado) VALUES ('Rua Teste', '1', 'Centro', '36000000', 'Juiz de Fora', 'mg')$q$,
-                '23514', 'ck_endereco_estado'
-            ),
 
-            -- Regra: logradouro obrigatório e não vazio
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_logradouro"
-            (
-                'Logradouro vazio',
-                $q$INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado) VALUES ('  ', '1', 'Centro', '36000000', 'Juiz de Fora', 'MG')$q$,
-                '23514', 'ck_endereco_logradouro'
-            ),
+-- ---------------------------------------------------------------------------------
+-- Nome obrigatório e não vazio: o NOT NULL não barra texto só com espaços.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_pessoa_nome.
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('   ', '99999999999', 'teste@exemplo.com');
 
-            -- Regra: ADR-002 — o mesmo imóvel (logradouro, número, CEP) é cadastrado uma única vez
-            -- Esperado: ERRO (violação de UNIQUE composta)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "uq_endereco_logradouro_numero_cep"
-            (
-                'Endereço duplicado',
-                $q$INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado) VALUES ('Avenida Barão do Rio Branco', '11', 'Centro', '36000037', 'Juiz de Fora', 'MG')$q$,
-                '23505', 'uq_endereco_logradouro_numero_cep'
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_nome"
+-- DETAIL:  Failing row contains (306,    , 99999999999, teste@exemplo.com).
 
-            -- ===================== TELEFONE =====================
 
-            -- Regra: o mesmo número não se repete para a mesma pessoa
-            -- Esperado: ERRO (violação de PK composta)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "pk_telefone"
-            (
-                'Telefone duplicado para a mesma pessoa',
-                $q$INSERT INTO telefone (id_pessoa, numero, tipo) VALUES (1, '32990000001', 'celular')$q$,
-                '23505', 'pk_telefone'
-            ),
+-- ---------------------------------------------------------------------------------
+-- Nome obrigatório (NOT NULL).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a restrição NOT NULL
+--                     da coluna nome.
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES (NULL, '99999999999', 'teste@exemplo.com');
 
-            -- Regra: telefone só com dígitos (DDD + 8 ou 9 dígitos), sem máscara
-            -- Esperado: ERRO (violação de CHECK)
-            -- Mensagem do SGBD: ERROR:  new row for relation "telefone" violates check constraint "ck_telefone_numero"
-            (
-                'Telefone com máscara',
-                $q$INSERT INTO telefone (id_pessoa, numero, tipo) VALUES (1, '(32) 99999-0000', 'celular')$q$,
-                '23514', 'ck_telefone_numero'
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "nome" of relation "pessoa" violates not-null constraint
+-- DETAIL:  Failing row contains (307, null, 99999999999, teste@exemplo.com).
 
-            -- Regra: telefone pertence a uma pessoa existente (entidade fraca)
-            -- Esperado: ERRO (violação de FK)
-            -- Mensagem do SGBD: ERROR:  insert or update on table "telefone" violates foreign key constraint "fk_telefone_pessoa"
-            (
-                'Telefone de pessoa inexistente',
-                $q$INSERT INTO telefone (id_pessoa, numero, tipo) VALUES (999999, '32999999999', 'celular')$q$,
-                '23503', 'fk_telefone_pessoa'
-            ),
 
-            -- Regra: tipo de telefone restrito ao domínio tipo_telefone
-            -- Esperado: ERRO (valor fora do ENUM)
-            -- Mensagem do SGBD: ERROR:  invalid input value for enum tipo_telefone: "whatsapp"
-            (
-                'Tipo de telefone fora do ENUM',
-                $q$INSERT INTO telefone (id_pessoa, numero, tipo) VALUES (1, '32999999999', 'whatsapp')$q$,
-                '22P02', NULL
-            ),
+-- ---------------------------------------------------------------------------------
+-- RR14: O CEP deve conter exatamente 8 dígitos numéricos.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_endereco_cep (CEP com hífen).
+-- ---------------------------------------------------------------------------------
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+VALUES ('Rua Teste', '1', 'Centro', '36000-00', 'Juiz de Fora', 'MG');
 
-            -- ===================== PESSOA_ENDERECO =====================
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_cep"
+-- DETAIL:  Failing row contains (331, Rua Teste, 1, Centro, 36000-00, Juiz de Fora, MG).
 
-            -- Regra: o vínculo pessoa–endereço não se repete
-            -- Esperado: ERRO (violação de PK composta)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "pk_pessoa_endereco"
-            (
-                'Vínculo pessoa-endereço duplicado',
-                $q$INSERT INTO pessoa_endereco (id_pessoa, id_endereco) VALUES (1, 1)$q$,
-                '23505', 'pk_pessoa_endereco'
-            ),
 
-            -- Regra: vínculo só com endereço existente
-            -- Esperado: ERRO (violação de FK)
-            -- Mensagem do SGBD: ERROR:  insert or update on table "pessoa_endereco" violates foreign key constraint "fk_pessoa_endereco_endereco"
-            (
-                'Vínculo com endereço inexistente',
-                $q$INSERT INTO pessoa_endereco (id_pessoa, id_endereco) VALUES (1, 999999)$q$,
-                '23503', 'fk_pessoa_endereco_endereco'
-            ),
+-- ---------------------------------------------------------------------------------
+-- RR14: A sigla do estado (UF) deve ter 2 letras maiúsculas.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_endereco_estado (UF em minúsculas).
+-- ---------------------------------------------------------------------------------
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+VALUES ('Rua Teste', '1', 'Centro', '36000000', 'Juiz de Fora', 'mg');
 
-            -- ===================== PAPÉIS =====================
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_estado"
+-- DETAIL:  Failing row contains (332, Rua Teste, 1, Centro, 36000000, Juiz de Fora, mg).
 
-            -- Regra: ADR-003 — cada pessoa tem no máximo um registro por papel
-            -- Esperado: ERRO (violação de PK)
-            -- Mensagem do SGBD: ERROR:  duplicate key value violates unique constraint "pk_entregador"
-            (
-                'Entregador duplicado',
-                $q$INSERT INTO entregador (id_pessoa, tipo_veiculo) VALUES (1, 'moto')$q$,
-                '23505', 'pk_entregador'
-            ),
 
-            -- Regra: tipo de veículo restrito ao domínio tipo_veiculo
-            -- Esperado: ERRO (valor fora do ENUM)
-            -- Mensagem do SGBD: ERROR:  invalid input value for enum tipo_veiculo: "patinete"
-            (
-                'Tipo de veículo fora do ENUM',
-                $q$INSERT INTO entregador (id_pessoa, tipo_veiculo) VALUES (72, 'patinete')$q$,
-                '22P02', NULL
-            ),
+-- ---------------------------------------------------------------------------------
+-- Logradouro obrigatório e não vazio.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_endereco_logradouro.
+-- ---------------------------------------------------------------------------------
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+VALUES ('  ', '1', 'Centro', '36000000', 'Juiz de Fora', 'MG');
 
-            -- Regra: tipo de veículo obrigatório
-            -- Esperado: ERRO (violação de NOT NULL)
-            -- Mensagem do SGBD: ERROR:  null value in column "tipo_veiculo" of relation "entregador" violates not-null constraint
-            (
-                'Tipo de veículo nulo',
-                $q$INSERT INTO entregador (id_pessoa, tipo_veiculo) VALUES (72, NULL)$q$,
-                '23502', NULL
-            ),
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_logradouro"
+-- DETAIL:  Failing row contains (333,   , 1, Centro, 36000000, Juiz de Fora, MG).
 
-            -- Regra: ADR-003 — papel só para pessoa existente
-            -- Esperado: ERRO (violação de FK)
-            -- Mensagem do SGBD: ERROR:  insert or update on table "lojista" violates foreign key constraint "fk_lojista_pessoa"
-            (
-                'Lojista sem pessoa',
-                $q$INSERT INTO lojista (id_pessoa) VALUES (999999)$q$,
-                '23503', 'fk_lojista_pessoa'
-            ),
 
-            -- Regra: ADR-003 — papel só para pessoa existente
-            -- Esperado: ERRO (violação de FK)
-            -- Mensagem do SGBD: ERROR:  insert or update on table "cliente" violates foreign key constraint "fk_cliente_pessoa"
-            (
-                'Cliente sem pessoa',
-                $q$INSERT INTO cliente (id_pessoa) VALUES (999999)$q$,
-                '23503', 'fk_cliente_pessoa'
-            ),
+-- ---------------------------------------------------------------------------------
+-- ADR-002: O mesmo imóvel (logradouro, número, CEP) é cadastrado uma única vez
+--       e compartilhado entre os moradores.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a unique constraint
+--                     uq_endereco_logradouro_numero_cep (repete o endereço 1).
+-- ---------------------------------------------------------------------------------
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+VALUES ('Avenida Barão do Rio Branco', '11', 'Centro', '36000037', 'Juiz de Fora', 'MG');
 
-            -- ===================== CLIENTE: ENDEREÇO ATUAL (ADR-002) =====================
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uq_endereco_logradouro_numero_cep"
+-- DETAIL:  Key (logradouro, numero, cep)=(Avenida Barão do Rio Branco, 11, 36000037) already exists.
 
-            -- Regra: ADR-002 — o endereço atual do cliente deve ser um endereço DELE
-            -- (o endereço 2 existe, mas pertence à pessoa 2, não ao cliente 101)
-            -- Esperado: ERRO (violação de FK composta)
-            -- Mensagem do SGBD: ERROR:  insert or update on table "cliente" violates foreign key constraint "fk_cliente_endereco_atual"
-            --                   DETAIL:  Key (id_pessoa, id_endereco_atual)=(101, 2) is not present in table "pessoa_endereco".
-            (
-                'Endereço atual de outra pessoa (UPDATE)',
-                $q$UPDATE cliente SET id_endereco_atual = 2 WHERE id_pessoa = 101$q$,
-                '23503', 'fk_cliente_endereco_atual'
-            ),
 
-            -- Regra: ADR-002 — idem, no cadastro de um novo cliente
-            -- (pessoa 1 é só entregadora; o endereço 2 é da pessoa 2)
-            -- Esperado: ERRO (violação de FK composta)
-            -- Mensagem do SGBD: ERROR:  insert or update on table "cliente" violates foreign key constraint "fk_cliente_endereco_atual"
-            (
-                'Endereço atual de outra pessoa (INSERT)',
-                $q$INSERT INTO cliente (id_pessoa, id_endereco_atual) VALUES (1, 2)$q$,
-                '23503', 'fk_cliente_endereco_atual'
-            ),
+-- ---------------------------------------------------------------------------------
+-- Telefone: o mesmo número não pode ser cadastrado duas vezes para a mesma pessoa.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
+--                     pk_telefone (celular já cadastrado da pessoa 1).
+-- ---------------------------------------------------------------------------------
+INSERT INTO telefone (id_pessoa, numero, tipo)
+VALUES (1, '32990000001', 'celular');
 
-            -- ===================== AÇÕES REFERENCIAIS (DELETE) =====================
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_telefone"
+-- DETAIL:  Key (id_pessoa, numero)=(1, 32990000001) already exists.
 
-            -- Regra: ADR-002 — endereço em uso não pode ser apagado (ON DELETE RESTRICT)
-            -- Esperado: ERRO (violação de RESTRICT). O PostgreSQL 18 devolve 23001
-            -- (restrict_violation); versões até a 17 devolvem 23503. O teste aceita os dois.
-            -- Mensagem do SGBD (PG 16): ERROR:  update or delete on table "endereco" violates foreign key constraint "fk_pessoa_endereco_endereco" on table "pessoa_endereco"
-            (
-                'Exclusão de endereço em uso',
-                $q$DELETE FROM endereco WHERE id_endereco = 1$q$,
-                '23001|23503', 'fk_pessoa_endereco_endereco'
-            ),
 
-            -- Regra: ADR-002 — o vínculo que é o endereço atual do cliente não pode ser
-            -- apagado antes de o cliente trocar de endereço (ON DELETE NO ACTION)
-            -- Esperado: ERRO (violação de FK composta)
-            -- Mensagem do SGBD: ERROR:  update or delete on table "pessoa_endereco" violates foreign key constraint "fk_cliente_endereco_atual" on table "cliente"
-            (
-                'Exclusão do endereço atual do cliente',
-                $q$DELETE FROM pessoa_endereco WHERE id_pessoa = 101 AND id_endereco = 101$q$,
-                '23503', 'fk_cliente_endereco_atual'
-            )
+-- ---------------------------------------------------------------------------------
+-- Telefone: apenas dígitos (DDD + 8 ou 9 dígitos), sem máscara.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     ck_telefone_numero.
+-- ---------------------------------------------------------------------------------
+INSERT INTO telefone (id_pessoa, numero, tipo)
+VALUES (1, '(32) 99999-0000', 'celular');
 
-        ) AS testes(descricao, comando, sqlstate_esperado, restricao_esperada)
-    LOOP
-        v_falhou := FALSE;
-        BEGIN
-            EXECUTE v_teste.comando;
-        EXCEPTION WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_sqlstate  = RETURNED_SQLSTATE,
-                v_restricao = CONSTRAINT_NAME;
-            -- sqlstate_esperado pode listar alternativas separadas por '|'
-            IF v_sqlstate IS NULL
-               OR NOT (v_sqlstate = ANY (string_to_array(v_teste.sqlstate_esperado, '|')))
-               OR (v_teste.restricao_esperada IS NOT NULL
-                   AND v_restricao IS DISTINCT FROM v_teste.restricao_esperada) THEN
-                RAISE EXCEPTION 'FALHOU: %. Esperado: % / %. Obtido: % / %',
-                    v_teste.descricao,
-                    v_teste.sqlstate_esperado, v_teste.restricao_esperada,
-                    v_sqlstate, v_restricao;
-            END IF;
-            v_falhou := TRUE;
-        END;
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "telefone" violates check constraint "ck_telefone_numero"
+-- DETAIL:  Failing row contains (1, (32) 99999-0000, celular).
 
-        IF NOT v_falhou THEN
-            RAISE EXCEPTION 'FALHOU: %. A operação inválida foi aceita', v_teste.descricao;
-        END IF;
 
-        RAISE NOTICE 'PASSOU: % (SQLSTATE %)', v_teste.descricao, v_sqlstate;
-    END LOOP;
-END;
-$$;
+-- ---------------------------------------------------------------------------------
+-- Telefone é entidade fraca: só existe vinculado a uma pessoa existente.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
+--                     fk_telefone_pessoa (pessoa 999999 não existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO telefone (id_pessoa, numero, tipo)
+VALUES (999999, '32999999999', 'celular');
 
--- -----------------------------------------------------------------------------
--- Parte 3 — ON DELETE CASCADE: apagar a pessoa apaga seus dependentes
--- -----------------------------------------------------------------------------
--- Regra: telefone é entidade fraca; papéis e vínculos de endereço não existem sem a pessoa
--- Pessoa 41: entregadora + cliente, com celular e casa (endereço 41)
--- Esperado: SUCESSO; telefone, entregador, cliente e pessoa_endereco da pessoa 41
---           somem; o endereço 41 continua existindo (endereço é imutável e compartilhável)
-DO $$
-BEGIN
-    DELETE FROM pessoa WHERE id_pessoa = 41;
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "telefone" violates foreign key constraint "fk_telefone_pessoa"
+-- DETAIL:  Key (id_pessoa)=(999999) is not present in table "pessoa".
 
-    IF EXISTS (SELECT 1 FROM telefone        WHERE id_pessoa = 41)
-       OR EXISTS (SELECT 1 FROM entregador   WHERE id_pessoa = 41)
-       OR EXISTS (SELECT 1 FROM cliente      WHERE id_pessoa = 41)
-       OR EXISTS (SELECT 1 FROM pessoa_endereco WHERE id_pessoa = 41) THEN
-        RAISE EXCEPTION 'FALHOU: o CASCADE não removeu os dependentes da pessoa 41';
-    END IF;
 
-    IF NOT EXISTS (SELECT 1 FROM endereco WHERE id_endereco = 41) THEN
-        RAISE EXCEPTION 'FALHOU: o endereço 41 foi apagado junto com a pessoa';
-    END IF;
+-- ---------------------------------------------------------------------------------
+-- Domínio tipo_telefone: aceita apenas 'celular', 'fixo' ou 'comercial'.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois o valor não pertence ao ENUM
+--                     tipo_telefone.
+-- ---------------------------------------------------------------------------------
+INSERT INTO telefone (id_pessoa, numero, tipo)
+VALUES (1, '32999999999', 'whatsapp');
 
-    RAISE NOTICE 'PASSOU: exclusão de pessoa propaga para telefone, papéis e vínculos (CASCADE)';
-END;
-$$;
+-- ERRO DO BANCO:
+-- ERROR:  invalid input value for enum tipo_telefone: "whatsapp"
 
--- Desfaz todas as alterações feitas pelos testes
-ROLLBACK;
+
+-- ---------------------------------------------------------------------------------
+-- Pessoa_Endereco: o mesmo vínculo pessoa–endereço não pode se repetir.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
+--                     pk_pessoa_endereco.
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa_endereco (id_pessoa, id_endereco)
+VALUES (1, 1);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_pessoa_endereco"
+-- DETAIL:  Key (id_pessoa, id_endereco)=(1, 1) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- Pessoa_Endereco: o vínculo só pode apontar para um endereço existente.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
+--                     fk_pessoa_endereco_endereco (endereço 999999 não existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa_endereco (id_pessoa, id_endereco)
+VALUES (1, 999999);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "pessoa_endereco" violates foreign key constraint "fk_pessoa_endereco_endereco"
+-- DETAIL:  Key (id_endereco)=(999999) is not present in table "endereco".
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-003: Uma pessoa possui no máximo um registro por papel.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
+--                     pk_entregador (pessoa 1 já é entregadora).
+-- ---------------------------------------------------------------------------------
+INSERT INTO entregador (id_pessoa, tipo_veiculo)
+VALUES (1, 'moto');
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_entregador"
+-- DETAIL:  Key (id_pessoa)=(1) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio tipo_veiculo: aceita apenas 'moto', 'bicicleta' ou 'carro'.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois o valor não pertence ao ENUM
+--                     tipo_veiculo.
+-- ---------------------------------------------------------------------------------
+INSERT INTO entregador (id_pessoa, tipo_veiculo)
+VALUES (72, 'patinete');
+
+-- ERRO DO BANCO:
+-- ERROR:  invalid input value for enum tipo_veiculo: "patinete"
+
+
+-- ---------------------------------------------------------------------------------
+-- Tipo de veículo obrigatório (NOT NULL).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a restrição NOT NULL
+--                     da coluna tipo_veiculo.
+-- ---------------------------------------------------------------------------------
+INSERT INTO entregador (id_pessoa, tipo_veiculo)
+VALUES (72, NULL);
+
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "tipo_veiculo" of relation "entregador" violates not-null constraint
+-- DETAIL:  Failing row contains (72, null).
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-003: Um papel só pode ser atribuído a uma pessoa existente.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
+--                     fk_lojista_pessoa (pessoa 999999 não existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO lojista (id_pessoa)
+VALUES (999999);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "lojista" violates foreign key constraint "fk_lojista_pessoa"
+-- DETAIL:  Key (id_pessoa)=(999999) is not present in table "pessoa".
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-003: Um papel só pode ser atribuído a uma pessoa existente.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
+--                     fk_cliente_pessoa (pessoa 999999 não existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO cliente (id_pessoa)
+VALUES (999999);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "cliente" violates foreign key constraint "fk_cliente_pessoa"
+-- DETAIL:  Key (id_pessoa)=(999999) is not present in table "pessoa".
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-002: O endereço atual do cliente deve ser um dos endereços DELE.
+--       O endereço 2 existe, mas pertence à pessoa 2, e não ao cliente 101.
+-- Resultado esperado: O banco deve rejeitar a alteração, pois viola a FK composta
+--                     fk_cliente_endereco_atual.
+-- ---------------------------------------------------------------------------------
+UPDATE cliente
+SET id_endereco_atual = 2
+WHERE id_pessoa = 101;
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "cliente" violates foreign key constraint "fk_cliente_endereco_atual"
+-- DETAIL:  Key (id_pessoa, id_endereco_atual)=(101, 2) is not present in table "pessoa_endereco".
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-002: O endereço atual do cliente deve ser um dos endereços DELE (INSERT).
+--       A pessoa 1 não é cliente nem possui o endereço 2.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a FK composta
+--                     fk_cliente_endereco_atual.
+-- ---------------------------------------------------------------------------------
+INSERT INTO cliente (id_pessoa, id_endereco_atual)
+VALUES (1, 2);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "cliente" violates foreign key constraint "fk_cliente_endereco_atual"
+-- DETAIL:  Key (id_pessoa, id_endereco_atual)=(1, 2) is not present in table "pessoa_endereco".
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial (DELETE) — ADR-002: Um endereço em uso não pode ser
+--       excluído (ON DELETE RESTRICT em fk_pessoa_endereco_endereco).
+-- Resultado esperado: O banco deve rejeitar a exclusão por violação de chave estrangeira
+--                     (fk_pessoa_endereco_endereco).
+-- ---------------------------------------------------------------------------------
+DELETE FROM endereco
+WHERE id_endereco = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "endereco" violates RESTRICT setting of foreign key constraint "fk_pessoa_endereco_endereco" on table "pessoa_endereco"
+-- DETAIL:  Key (id_endereco)=(1) is referenced from table "pessoa_endereco".
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial (DELETE) — ADR-002: O vínculo que é o endereço atual
+--       de um cliente não pode ser excluído antes de o cliente trocar de endereço
+--       (ON DELETE NO ACTION em fk_cliente_endereco_atual).
+-- Resultado esperado: O banco deve rejeitar a exclusão por violação da FK composta
+--                     (fk_cliente_endereco_atual).
+-- ---------------------------------------------------------------------------------
+DELETE FROM pessoa_endereco
+WHERE id_pessoa = 101 AND id_endereco = 101;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "pessoa_endereco" violates foreign key constraint "fk_cliente_endereco_atual" on table "cliente"
+-- DETAIL:  Key (id_pessoa, id_endereco)=(101, 101) is still referenced from table "cliente".
+
+
+-- ---------------------------------------------------------------------------------
+-- Caso válido — RN10 / RR14: Pessoa com nome, CPF de 11 dígitos e e-mail válidos.
+-- Resultado esperado: O banco deve aceitar a inserção.
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Pessoa Válida', '12345678909', 'valida@exemplo.com');
+
+-- RESULTADO DO BANCO:
+-- INSERT 0 1
+
+
+-- ---------------------------------------------------------------------------------
+-- Caso válido — ADR-003 (sobreposição): a mesma pessoa recebe telefone, endereço
+--       e dois papéis (entregador e cliente), com o endereço atual sendo um endereço dela.
+--       O endereço 1 já é usado pela pessoa 1: o imóvel é compartilhado (ADR-002).
+-- Resultado esperado: O banco deve aceitar todas as inserções.
+-- ---------------------------------------------------------------------------------
+INSERT INTO telefone (id_pessoa, numero, tipo)
+SELECT id_pessoa, '32988887777', 'celular' FROM pessoa WHERE cpf = '12345678909';
+
+INSERT INTO pessoa_endereco (id_pessoa, id_endereco, apelido)
+SELECT id_pessoa, 1, 'Casa' FROM pessoa WHERE cpf = '12345678909';
+
+INSERT INTO entregador (id_pessoa, tipo_veiculo)
+SELECT id_pessoa, 'bicicleta' FROM pessoa WHERE cpf = '12345678909';
+
+INSERT INTO cliente (id_pessoa, id_endereco_atual)
+SELECT id_pessoa, 1 FROM pessoa WHERE cpf = '12345678909';
+
+-- RESULTADO DO BANCO:
+-- INSERT 0 1
+-- INSERT 0 1
+-- INSERT 0 1
+-- INSERT 0 1
+
+
+-- ---------------------------------------------------------------------------------
+-- Caso válido — ADR-002 (MATCH SIMPLE): o endereço atual do cliente é opcional.
+-- Resultado esperado: O banco deve aceitar a alteração para NULL.
+-- ---------------------------------------------------------------------------------
+UPDATE cliente
+SET id_endereco_atual = NULL
+WHERE id_pessoa = (SELECT id_pessoa FROM pessoa WHERE cpf = '12345678909');
+
+-- RESULTADO DO BANCO:
+-- UPDATE 1
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial (DELETE) — ON DELETE CASCADE: ao excluir a pessoa,
+--       seus telefones, papéis e vínculos de endereço são excluídos junto.
+--       O endereço 1 continua existindo (é compartilhado e imutável).
+-- Resultado esperado: O banco deve aceitar a exclusão e a consulta seguinte deve retornar
+--                     zero dependentes e o endereço 1 ainda cadastrado.
+-- ---------------------------------------------------------------------------------
+DELETE FROM pessoa
+WHERE cpf = '12345678909';
+
+SELECT
+    (SELECT count(*) FROM pessoa          WHERE cpf = '12345678909')      AS pessoa,
+    (SELECT count(*) FROM telefone        WHERE numero = '32988887777')   AS telefone,
+    (SELECT count(*) FROM entregador e
+       WHERE NOT EXISTS (SELECT 1 FROM pessoa p WHERE p.id_pessoa = e.id_pessoa)) AS entregador_orfao,
+    (SELECT count(*) FROM endereco        WHERE id_endereco = 1)          AS endereco_1;
+
+-- RESULTADO DO BANCO:
+-- DELETE 1
+--  pessoa | telefone | entregador_orfao | endereco_1 
+-- --------+----------+------------------+------------
+--       0 |        0 |                0 |          1
+-- (1 row)
