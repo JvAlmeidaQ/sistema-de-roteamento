@@ -29,23 +29,32 @@ CREATE TABLE telefone (
     CONSTRAINT ck_telefone_numero CHECK (numero ~ '^[0-9]{10,11}$')
 );
 
+CREATE TABLE cep (
+    cep CHAR(8) NOT NULL,
+    cidade VARCHAR(80) NOT NULL,
+    estado CHAR(2) NOT NULL,
+
+    CONSTRAINT pk_cep PRIMARY KEY (cep),
+    CONSTRAINT ck_cep_cep    CHECK (cep ~ '^[0-9]{8}$'),
+    CONSTRAINT ck_cep_cidade CHECK (btrim(cidade) <> ''),
+    CONSTRAINT ck_cep_estado CHECK (estado ~ '^[A-Z]{2}$')
+);
+
 CREATE TABLE endereco (
     id_endereco BIGINT GENERATED ALWAYS AS IDENTITY,
     logradouro VARCHAR(150) NOT NULL,
     numero VARCHAR(10) NOT NULL,
     bairro VARCHAR(80) NOT NULL,
     cep CHAR(8) NOT NULL,
-    cidade VARCHAR(80) NOT NULL,
-    estado CHAR(2) NOT NULL,
 
     CONSTRAINT pk_endereco PRIMARY KEY (id_endereco),
     CONSTRAINT uq_endereco_logradouro_numero_cep UNIQUE (logradouro, numero, cep),
+    CONSTRAINT fk_endereco_cep FOREIGN KEY (cep)
+        REFERENCES cep (cep)
+        ON UPDATE RESTRICT ON DELETE RESTRICT,
     CONSTRAINT ck_endereco_logradouro CHECK (btrim(logradouro) <> ''),
     CONSTRAINT ck_endereco_numero     CHECK (btrim(numero) <> ''),
-    CONSTRAINT ck_endereco_bairro     CHECK (btrim(bairro) <> ''),
-    CONSTRAINT ck_endereco_cep CHECK (cep ~ '^[0-9]{8}$'),
-    CONSTRAINT ck_endereco_cidade     CHECK (btrim(cidade) <> ''),
-    CONSTRAINT ck_endereco_estado CHECK (estado ~ '^[A-Z]{2}$')
+    CONSTRAINT ck_endereco_bairro     CHECK (btrim(bairro) <> '')
 );
 
 CREATE TABLE pessoa_endereco (
