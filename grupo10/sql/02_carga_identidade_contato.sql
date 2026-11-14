@@ -36,19 +36,11 @@ SELECT
 FROM generate_series(1, 300) AS g(i);
 
 -- -----------------------------------------------------------------------------
--- 2a. Cep (30 linhas) — cada CEP guarda sua cidade e seu estado uma única vez
+-- 2. Endereco (330 linhas)
+--    1–280: casas; 281–330: endereços de trabalho.
+--    O número é único por linha, então a UK (logradouro, numero, cep) nunca colide.
 -- -----------------------------------------------------------------------------
-INSERT INTO cep (cep, cidade, estado)
-SELECT '360' || lpad((k * 1037)::TEXT, 5, '0'), 'Juiz de Fora', 'MG'
-FROM generate_series(1, 30) AS g(k);
-
--- -----------------------------------------------------------------------------
--- 2b. Endereco (330 linhas)
---     1–280: casas; 281–330: endereços de trabalho.
---     Vários endereços compartilham o mesmo CEP (330 endereços em 30 CEPs).
---     O número é único por linha, então a UK (logradouro, numero, cep) nunca colide.
--- -----------------------------------------------------------------------------
-INSERT INTO endereco (logradouro, numero, bairro, cep)
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
 SELECT
     (ARRAY['Rua Halfeld', 'Avenida Barão do Rio Branco', 'Rua São Mateus',
            'Avenida Presidente Itamar Franco', 'Rua Santo Antônio',
@@ -58,7 +50,9 @@ SELECT
     (10 + i)::TEXT,
     (ARRAY['Centro', 'São Mateus', 'Cascatinha', 'Granbery', 'Bom Pastor',
            'Alto dos Passos', 'São Pedro', 'Benfica', 'Santa Luzia', 'Manoel Honório'])[1 + i % 10],
-    '360' || lpad(((1 + i % 30) * 1037)::TEXT, 5, '0')
+    '360' || lpad(((i * 37) % 100000)::TEXT, 5, '0'),
+    'Juiz de Fora',
+    'MG'
 FROM generate_series(1, 330) AS g(i);
 
 -- -----------------------------------------------------------------------------
@@ -180,7 +174,6 @@ COMMIT;
 -- 8. Estatísticas para o planejador de consultas
 -- -----------------------------------------------------------------------------
 ANALYZE pessoa;
-ANALYZE cep;
 ANALYZE endereco;
 ANALYZE pessoa_endereco;
 ANALYZE telefone;

@@ -81,41 +81,27 @@ WHERE id_pessoa = 2;
 -- ---------------------------------------------------------------------------------
 -- RR14: O CEP deve ser numérico e ter exatamente 8 dígitos.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
---                     ck_cep_cep (CEP com hífen).
+--                     ck_endereco_cep (CEP com hífen).
 -- ---------------------------------------------------------------------------------
-INSERT INTO cep (cep, cidade, estado)
-VALUES ('36000-00', 'Juiz de Fora', 'MG');
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+VALUES ('Rua Teste', '1', 'Centro', '36000-00', 'Juiz de Fora', 'MG');
 
 -- ERRO DO BANCO:
--- ERROR:  new row for relation "cep" violates check constraint "ck_cep_cep"
--- DETAIL:  Failing row contains (36000-00, Juiz de Fora, MG).
+-- ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_cep"
+-- DETAIL:  Failing row contains (331, Rua Teste, 1, Centro, 36000-00, Juiz de Fora, MG).
 
 
 -- ---------------------------------------------------------------------------------
 -- RR14: A sigla do estado (UF) deve ter 2 caracteres.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
---                     ck_cep_estado (UF com 1 caractere).
+--                     ck_endereco_estado (UF com 1 caractere).
 -- ---------------------------------------------------------------------------------
-INSERT INTO cep (cep, cidade, estado)
-VALUES ('36099999', 'Juiz de Fora', 'M');
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+VALUES ('Rua Teste', '1', 'Centro', '36000000', 'Juiz de Fora', 'M');
 
 -- ERRO DO BANCO:
--- ERROR:  new row for relation "cep" violates check constraint "ck_cep_estado"
--- DETAIL:  Failing row contains (36099999, Juiz de Fora, M ).
-
-
--- ---------------------------------------------------------------------------------
--- Decomposição de Endereco (Seção 2.4.3): Endereco.cep References Cep.cep.
---       Um endereço só pode usar um CEP cadastrado em Cep.
--- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
---                     fk_endereco_cep (CEP 99999999 não cadastrado).
--- ---------------------------------------------------------------------------------
-INSERT INTO endereco (logradouro, numero, bairro, cep)
-VALUES ('Rua Teste', '1', 'Centro', '99999999');
-
--- ERRO DO BANCO:
--- ERROR:  insert or update on table "endereco" violates foreign key constraint "fk_endereco_cep"
--- DETAIL:  Key (cep)=(99999999) is not present in table "cep".
+-- ERROR:  new row for relation "endereco" violates check constraint "ck_endereco_estado"
+-- DETAIL:  Failing row contains (332, Rua Teste, 1, Centro, 36000000, Juiz de Fora, M ).
 
 
 -- ---------------------------------------------------------------------------------
@@ -232,20 +218,6 @@ WHERE id_endereco = 1;
 -- ERRO DO BANCO:
 -- ERROR:  update or delete on table "endereco" violates RESTRICT setting of foreign key constraint "fk_pessoa_endereco_endereco" on table "pessoa_endereco"
 -- DETAIL:  Key (id_endereco)=(1) is referenced from table "pessoa_endereco".
-
-
--- ---------------------------------------------------------------------------------
--- Integridade Referencial (DELETE): um CEP usado por algum endereço não pode
---       ser excluído (ON DELETE RESTRICT em fk_endereco_cep).
--- Resultado esperado: O banco deve rejeitar a exclusão por violação de chave estrangeira
---                     (fk_endereco_cep).
--- ---------------------------------------------------------------------------------
-DELETE FROM cep
-WHERE cep = '36001037';
-
--- ERRO DO BANCO:
--- ERROR:  update or delete on table "cep" violates RESTRICT setting of foreign key constraint "fk_endereco_cep" on table "endereco"
--- DETAIL:  Key (cep)=(36001037) is referenced from table "endereco".
 
 
 -- ---------------------------------------------------------------------------------
