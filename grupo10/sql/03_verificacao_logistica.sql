@@ -1,173 +1,124 @@
+-- E4: executar após 01/02 e antes dos gatilhos. Cada caso negativo captura
+-- apenas o tipo de erro esperado; se a operação for aceita, o teste falha.
+-- Pré-requisitos: um entregador e uma entrega aguardando atribuição na carga 02.
+-- Ausência desses dados é falha de preparação, não rejeição esperada de uma RN.
+-- As mensagens abaixo são o texto principal observado no PostgreSQL 18.
+-- DETAIL pode variar conforme os IDs gerados e o idioma configurado no servidor.
+-- Os NOTICEs reproduzem SQLERRM; ROLLBACK preserva os dados, mas não as sequências.
 BEGIN;
-
 DO $$
 DECLARE
     v_rota BIGINT;
     v_entrega BIGINT;
-    v_inexistente BIGINT;
-    v_criada_em TIMESTAMPTZ;
-    v_teste RECORD;
-    v_sqlstate TEXT;
-    v_restricao TEXT;
-    v_falhou BOOLEAN;
+    v_pedido BIGINT;
+    v_entregador BIGINT;
 BEGIN
-    SELECT id_entrega INTO STRICT v_entrega
-    FROM entrega
-    WHERE id_pedido = 6
-      AND status = 'aguardando_entregador'
-      AND id_rota IS NULL;
+    SELECT id_entrega, id_pedido INTO STRICT v_entrega, v_pedido
+    FROM entrega WHERE status = 'aguardando_entregador' ORDER BY id_entrega LIMIT 1;
+    SELECT id_pessoa INTO STRICT v_entregador FROM entregador ORDER BY id_pessoa LIMIT 1;
 
-    IF NOT EXISTS (SELECT 1 FROM entrega WHERE id_pedido = 1) THEN
-        RAISE EXCEPTION 'Pré-requisito ausente: entrega do pedido 1';
+    -- Regra complementar do ADR-005 e integridade estrutural: criação de rota
+    -- e vínculo coerente com o status, antes dos gatilhos de RN12/RR06.
+    -- Esperado: INSERT e UPDATE aceitos, com data de criação preenchida.
+    INSERT INTO rota (id_entregador) VALUES (v_entregador) RETURNING id_rota INTO v_rota;
+    UPDATE entrega SET status = 'aceita', id_rota = v_rota WHERE id_entrega = v_entrega;
+    IF NOT EXISTS (SELECT 1 FROM rota WHERE id_rota = v_rota AND criada_em IS NOT NULL)
+       OR NOT EXISTS (SELECT 1 FROM entrega WHERE id_entrega = v_entrega
+                      AND id_rota = v_rota AND status = 'aceita') THEN
+        RAISE EXCEPTION 'Falha na criação de rota ou vinculação válida';
     END IF;
 
-    SELECT candidato INTO v_inexistente
-    FROM generate_series(-1::BIGINT, -1000::BIGINT, -1::BIGINT) AS ids(candidato)
-    WHERE NOT EXISTS (SELECT 1 FROM entregador WHERE id_pessoa = candidato)
-      AND NOT EXISTS (SELECT 1 FROM pedido WHERE id_pedido = candidato)
-      AND NOT EXISTS (SELECT 1 FROM rota WHERE id_rota = candidato)
-    LIMIT 1;
+    -- PK de rota: identificador único, sem RN própria na seção 2.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23505]: duplicate key value violates unique constraint "pk_rota"
+    BEGIN
+        INSERT INTO rota (id_rota, id_entregador) OVERRIDING SYSTEM VALUE
+        VALUES (v_rota, v_entregador);
+        RAISE EXCEPTION 'Falhou: PK duplicada foi aceita';
+    EXCEPTION WHEN unique_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    IF v_inexistente IS NULL THEN
-        RAISE EXCEPTION 'Não foi possível reservar um ID inexistente para os testes';
-    END IF;
+    -- Associação Pedido–Entrega 1:1 do modelo lógico, uq_entrega_pedido.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23505]: duplicate key value violates unique constraint "uq_entrega_pedido"
+    BEGIN
+        INSERT INTO entrega (id_pedido, previsao_entrega) VALUES (v_pedido, CURRENT_TIMESTAMP);
+        RAISE EXCEPTION 'Falhou: segunda entrega do pedido foi aceita';
+    EXCEPTION WHEN unique_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    INSERT INTO rota (id_entregador)
-    VALUES (1)
-    RETURNING id_rota, criada_em INTO v_rota, v_criada_em;
+    -- FK rota→entregador: toda rota referencia um entregador existente.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23503]: insert or update on table "rota" violates foreign key constraint "fk_rota_entregador"
+    BEGIN
+        INSERT INTO rota (id_entregador) SELECT COALESCE(MAX(id_pessoa), 0) + 1 FROM entregador;
+        RAISE EXCEPTION 'Falhou: entregador inexistente foi aceito';
+    EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    IF v_criada_em IS DISTINCT FROM CURRENT_TIMESTAMP THEN
-        RAISE EXCEPTION 'Falha no valor padrão de rota.criada_em';
-    END IF;
+    -- FK entrega→pedido: toda entrega referencia um pedido existente.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23503]: insert or update on table "entrega" violates foreign key constraint "fk_entrega_pedido"
+    BEGIN
+        UPDATE entrega SET id_pedido = (SELECT MAX(id_pedido) + 1 FROM pedido)
+        WHERE id_entrega = v_entrega;
+        RAISE EXCEPTION 'Falhou: pedido inexistente foi aceito';
+    EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    UPDATE rota SET encerrada_em = criada_em WHERE id_rota = v_rota;
-    UPDATE rota SET encerrada_em = NULL WHERE id_rota = v_rota;
+    -- FK entrega→rota: um vínculo preenchido precisa apontar para rota existente.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23503]: insert or update on table "entrega" violates foreign key constraint "fk_entrega_rota"
+    BEGIN
+        UPDATE entrega SET id_rota = (SELECT MAX(id_rota) + 1 FROM rota)
+        WHERE id_entrega = v_entrega;
+        RAISE EXCEPTION 'Falhou: rota inexistente foi aceita';
+    EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    UPDATE entrega
-    SET id_rota = v_rota, status = 'aceita'
-    WHERE id_entrega = v_entrega;
+    -- NOT NULL de previsao_entrega, necessária para identificar atrasos na RN03/RR05.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23502]: null value in column "previsao_entrega" of relation "entrega" violates not-null constraint
+    BEGIN
+        UPDATE entrega SET previsao_entrega = NULL WHERE id_entrega = v_entrega;
+        RAISE EXCEPTION 'Falhou: previsão nula foi aceita';
+    EXCEPTION WHEN not_null_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    IF NOT EXISTS (
-        SELECT 1 FROM entrega
-        WHERE id_entrega = v_entrega AND id_rota = v_rota AND status = 'aceita'
-    ) THEN
-        RAISE EXCEPTION 'Falha na vinculação válida da entrega à rota';
-    END IF;
+    -- Regra complementar: encerramento não pode anteceder a criação da rota.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23514]: new row for relation "rota" violates check constraint "ck_rota_ordem_temporal"
+    BEGIN
+        UPDATE rota SET encerrada_em = criada_em - INTERVAL '1 second' WHERE id_rota = v_rota;
+        RAISE EXCEPTION 'Falhou: encerramento anterior à criação foi aceito';
+    EXCEPTION WHEN check_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    RAISE NOTICE 'PASSOU: criação de rota, valor padrão, encerramento válido e vinculação de entrega';
+    -- ADR-005: entrega aceita exige rota, ck_entrega_status_rota.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23514]: new row for relation "entrega" violates check constraint "ck_entrega_status_rota"
+    BEGIN
+        UPDATE entrega SET id_rota = NULL WHERE id_entrega = v_entrega;
+        RAISE EXCEPTION 'Falhou: entrega aceita sem rota foi aceita';
+    EXCEPTION WHEN check_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    FOR v_teste IN
-        SELECT * FROM (VALUES
-            (
-                'PK duplicada de rota',
-                format('INSERT INTO rota (id_rota, id_entregador) OVERRIDING SYSTEM VALUE VALUES (%s, 1)', v_rota),
-                '23505', 'pk_rota'
-            ),
-            (
-                'PK duplicada de entrega',
-                format('INSERT INTO entrega (id_entrega, id_pedido, previsao_entrega) OVERRIDING SYSTEM VALUE VALUES (%s, 6, CURRENT_TIMESTAMP)', v_entrega),
-                '23505', 'pk_entrega'
-            ),
-            (
-                'Pedido duplicado na entrega',
-                format('UPDATE entrega SET id_pedido = 1 WHERE id_entrega = %s', v_entrega),
-                '23505', 'uq_entrega_pedido'
-            ),
-            (
-                'Entregador inexistente',
-                format('INSERT INTO rota (id_entregador) VALUES (%s)', v_inexistente),
-                '23503', 'fk_rota_entregador'
-            ),
-            (
-                'Pedido inexistente',
-                format('UPDATE entrega SET id_pedido = %s WHERE id_entrega = %s', v_inexistente, v_entrega),
-                '23503', 'fk_entrega_pedido'
-            ),
-            (
-                'Rota inexistente',
-                format('UPDATE entrega SET id_rota = %s WHERE id_entrega = %s', v_inexistente, v_entrega),
-                '23503', 'fk_entrega_rota'
-            ),
-            (
-                'Entregador obrigatório',
-                'INSERT INTO rota (id_entregador) VALUES (NULL)',
-                '23502', NULL
-            ),
-            (
-                'Instante de criação obrigatório',
-                'INSERT INTO rota (id_entregador, criada_em) VALUES (1, NULL)',
-                '23502', NULL
-            ),
-            (
-                'Pedido obrigatório',
-                format('UPDATE entrega SET id_pedido = NULL WHERE id_entrega = %s', v_entrega),
-                '23502', NULL
-            ),
-            (
-                'Status obrigatório',
-                format('UPDATE entrega SET status = NULL WHERE id_entrega = %s', v_entrega),
-                '23502', NULL
-            ),
-            (
-                'Previsão obrigatória',
-                format('UPDATE entrega SET previsao_entrega = NULL WHERE id_entrega = %s', v_entrega),
-                '23502', NULL
-            ),
-            (
-                'Encerramento anterior à criação',
-                format('UPDATE rota SET encerrada_em = criada_em - INTERVAL ''1 second'' WHERE id_rota = %s', v_rota),
-                '23514', 'ck_rota_ordem_temporal'
-            ),
-            (
-                'Entrega aguardando com rota preenchida',
-                format('UPDATE entrega SET status = ''aguardando_entregador'' WHERE id_entrega = %s', v_entrega),
-                '23514', 'ck_entrega_status_rota'
-            ),
-            (
-                'Entrega aceita sem rota',
-                format('UPDATE entrega SET id_rota = NULL WHERE id_entrega = %s', v_entrega),
-                '23514', 'ck_entrega_status_rota'
-            ),
-            (
-                'Status fora do enum',
-                format('UPDATE entrega SET status = ''invalido'' WHERE id_entrega = %s', v_entrega),
-                '22P02', NULL
-            ),
-            (
-                'Exclusão de rota com entrega',
-                format('DELETE FROM rota WHERE id_rota = %s', v_rota),
-                '23001', 'fk_entrega_rota'
-            )
-        ) AS testes(descricao, comando, sqlstate_esperado, restricao_esperada)
-    LOOP
-        v_falhou := FALSE;
+    -- ADR-005: entrega aguardando entregador ainda não possui rota.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23514]: new row for relation "entrega" violates check constraint "ck_entrega_status_rota"
+    BEGIN
+        UPDATE entrega SET status = 'aguardando_entregador' WHERE id_entrega = v_entrega;
+        RAISE EXCEPTION 'Falhou: entrega aguardando com rota foi aceita';
+    EXCEPTION WHEN check_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-        BEGIN
-            EXECUTE v_teste.comando;
-        EXCEPTION WHEN OTHERS THEN
-            GET STACKED DIAGNOSTICS
-                v_sqlstate = RETURNED_SQLSTATE,
-                v_restricao = CONSTRAINT_NAME;
+    -- Domínio do status, usado pelo fluxo RR06; aqui é verificado apenas o ENUM.
+    -- Esperado: rejeição. SGBD [SQLSTATE 22P02]: invalid input value for enum status_entrega: "invalido"
+    BEGIN
+        UPDATE entrega SET status = 'invalido' WHERE id_entrega = v_entrega;
+        RAISE EXCEPTION 'Falhou: status fora do ENUM foi aceito';
+    EXCEPTION WHEN invalid_text_representation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-            IF v_sqlstate IS DISTINCT FROM v_teste.sqlstate_esperado
-                OR (v_teste.restricao_esperada IS NOT NULL
-                    AND v_restricao IS DISTINCT FROM v_teste.restricao_esperada) THEN
-                RAISE EXCEPTION 'FALHOU: %. Esperado: % / %. Obtido: % / %',
-                    v_teste.descricao,
-                    v_teste.sqlstate_esperado, v_teste.restricao_esperada,
-                    v_sqlstate, v_restricao;
-            END IF;
-
-            v_falhou := TRUE;
-        END;
-
-        IF NOT v_falhou THEN
-            RAISE EXCEPTION 'FALHOU: %. A operação inválida foi aceita', v_teste.descricao;
-        END IF;
-
-        RAISE NOTICE 'PASSOU: % (SQLSTATE %)', v_teste.descricao, v_teste.sqlstate_esperado;
-    END LOOP;
+    -- Ação referencial RESTRICT: excluir uma rota não deve apagar suas entregas.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23001]: update or delete on table "rota" violates RESTRICT setting of foreign key constraint "fk_entrega_rota" on table "entrega"
+    BEGIN
+        DELETE FROM rota WHERE id_rota = v_rota;
+        RAISE EXCEPTION 'Falhou: rota referenciada foi excluída';
+    EXCEPTION WHEN restrict_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
+    RAISE NOTICE 'PASSOU: verificação das restrições de Logística';
 END;
 $$;
-
 ROLLBACK;

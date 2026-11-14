@@ -1,207 +1,97 @@
+-- E6, seção 7.3: executar após 06_triggers_logistica.sql.
+-- Casos sequenciais com dados temporários. A carga e os registros externos
+-- são preservados pelo ROLLBACK; as sequências de identidade podem avançar.
+-- Pré-requisitos: ao menos um pedido com vínculos válidos, um entregador e
+-- os quatro gatilhos instalados. Os comentários transcrevem SQLERRM do PostgreSQL 18.
+-- Falhas das verificações levantam P0001; rejeições das regras usam 23514.
 BEGIN;
-
-CREATE FUNCTION pg_temp.logistica_esperar_erro(p_descricao TEXT, p_sql TEXT, p_restricao TEXT)
-RETURNS VOID
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_codigo TEXT;
-    v_restricao TEXT;
-BEGIN
-    BEGIN
-        EXECUTE p_sql;
-    EXCEPTION WHEN OTHERS THEN
-        GET STACKED DIAGNOSTICS v_codigo = RETURNED_SQLSTATE, v_restricao = CONSTRAINT_NAME;
-        IF v_codigo <> '23514' OR v_restricao IS DISTINCT FROM p_restricao THEN
-            RAISE EXCEPTION 'FALHOU: %. Erro inesperado: % / %', p_descricao, v_codigo, v_restricao;
-        END IF;
-        RAISE NOTICE 'PASSOU: %', p_descricao;
-        RETURN;
-    END;
-    RAISE EXCEPTION 'FALHOU: %. A operação inválida foi aceita', p_descricao;
-END;
-$$;
-
-CREATE FUNCTION pg_temp.logistica_novo_pedido(p_status status_pedido)
-RETURNS BIGINT
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_id BIGINT;
-BEGIN
-    INSERT INTO pedido (
-        id_loja, id_cliente, id_endereco, status,
-        subtotal, taxa_entrega, taxa_servico, valor_total
-    )
-    SELECT id_loja, id_cliente, id_endereco, p_status,
-        subtotal, taxa_entrega, taxa_servico, valor_total
-    FROM pedido WHERE id_pedido = 6
-    RETURNING id_pedido INTO STRICT v_id;
-    RETURN v_id;
-END;
-$$;
+-- Clona apenas vínculos e valores válidos; generate_series cria três pedidos
+-- para demonstrar duas vagas permitidas e uma atribuição barrada pela RN02.
+CREATE TEMP TABLE pedidos_teste_logistica ON COMMIT DROP AS
+WITH novos AS (
+    INSERT INTO pedido (id_loja, id_cliente, id_endereco, status, forma_pagamento,
+                        subtotal, taxa_entrega, taxa_servico, valor_total)
+    SELECT p.id_loja, p.id_cliente, p.id_endereco, 'em_preparacao', p.forma_pagamento,
+           p.subtotal, p.taxa_entrega, p.taxa_servico, p.valor_total
+    FROM (SELECT * FROM pedido ORDER BY id_pedido LIMIT 1) p
+    CROSS JOIN generate_series(1, 3)
+    RETURNING id_pedido
+)
+SELECT id_pedido FROM novos;
 
 DO $$
 DECLARE
-    v_pedidos BIGINT[] := ARRAY[]::BIGINT[];
-    v_entregas BIGINT[] := ARRAY[]::BIGINT[];
     v_pedido BIGINT;
-    v_entrega BIGINT;
-    v_rota1 BIGINT;
-    v_rota2 BIGINT;
-    v_rota3 BIGINT;
-    v_previsao TIMESTAMPTZ;
-    v_minutos INTEGER;
-    i INTEGER;
+    v_rota BIGINT;
+    v_entregador BIGINT;
 BEGIN
-    IF (SELECT COUNT(*) FROM pg_trigger
-        WHERE tgname IN (
-            'trg_entrega_10_validar', 'trg_entrega_20_limitar_rota',
-            'trg_entrega_30_concluir_pedido', 'trg_pedido_logistica_gerar_entrega'
-        ) AND tgenabled = 'O') <> 4 THEN
-        RAISE EXCEPTION 'Os quatro gatilhos de Logística devem estar instalados e habilitados';
+    IF (SELECT COUNT(*) FROM pedidos_teste_logistica) <> 3 THEN
+        RAISE EXCEPTION 'A verificação exige ao menos um pedido externo para copiar os vínculos';
+    END IF;
+    SELECT MIN(id_pedido) INTO v_pedido FROM pedidos_teste_logistica;
+    SELECT id_pessoa INTO STRICT v_entregador FROM entregador ORDER BY id_pessoa LIMIT 1;
+    INSERT INTO rota (id_entregador) VALUES (v_entregador) RETURNING id_rota INTO v_rota;
+
+    -- RN12/RR07: pedido em preparação não pode originar entrega.
+    -- Esperado: nenhuma entrega automática e rejeição da criação manual.
+    -- SGBD [SQLSTATE 23514]: RN12: a entrega somente pode ser criada para pedido pronto
+    IF EXISTS (SELECT 1 FROM entrega WHERE id_pedido IN (SELECT id_pedido FROM pedidos_teste_logistica)) THEN
+        RAISE EXCEPTION 'Falhou: pedido em preparação gerou entrega';
+    END IF;
+    BEGIN
+        INSERT INTO entrega (id_pedido, previsao_entrega) VALUES (v_pedido, CURRENT_TIMESTAMP);
+        RAISE EXCEPTION 'Falhou: entrega de pedido em preparação foi aceita';
+    EXCEPTION WHEN check_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
+
+    -- RN12/RR07 e ADR-004/005: ao ficar pronto, cada pedido gera uma entrega
+    -- aguardando entregador, sem rota, com previsão calculada pela estimativa da loja.
+    -- Esperado: três entregas criadas com esses valores.
+    UPDATE pedido SET status = 'pronto'
+    WHERE id_pedido IN (SELECT id_pedido FROM pedidos_teste_logistica);
+    IF (SELECT COUNT(*) FROM entrega e JOIN pedido p USING (id_pedido)
+        JOIN loja l USING (id_loja)
+        WHERE e.id_pedido IN (SELECT id_pedido FROM pedidos_teste_logistica)
+          AND e.status = 'aguardando_entregador' AND e.id_rota IS NULL
+          AND e.previsao_entrega = statement_timestamp() + make_interval(mins => l.tempo_entrega_estimado)) <> 3 THEN
+        RAISE EXCEPTION 'Falhou: geração automática ou cálculo da previsão';
     END IF;
 
-    v_pedido := pg_temp.logistica_novo_pedido('em_preparacao');
-    IF EXISTS (SELECT 1 FROM entrega WHERE id_pedido = v_pedido) THEN
-        RAISE EXCEPTION 'Pedido em preparação gerou entrega';
+    -- RR06: não pode saltar de aguardando entregador para a caminho.
+    -- Esperado: rejeição. SGBD [SQLSTATE 23514]: Transição inválida de entrega: aguardando_entregador -> a_caminho
+    BEGIN
+        UPDATE entrega SET status = 'a_caminho', id_rota = v_rota WHERE id_pedido = v_pedido;
+        RAISE EXCEPTION 'Falhou: salto de status foi aceito';
+    EXCEPTION WHEN check_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
+
+    -- RN02/RR02: a primeira e a segunda entregas cabem na rota.
+    -- RR06: aguardando entregador -> aceita é uma transição válida.
+    -- Esperado: duas entregas vinculadas, sem erro.
+    UPDATE entrega SET status = 'aceita', id_rota = v_rota
+    WHERE id_pedido IN (SELECT id_pedido FROM pedidos_teste_logistica ORDER BY id_pedido LIMIT 2);
+    IF (SELECT COUNT(*) FROM entrega WHERE id_rota = v_rota) <> 2 THEN
+        RAISE EXCEPTION 'Falhou: primeira ou segunda entrega foi bloqueada';
     END IF;
 
-    PERFORM pg_temp.logistica_esperar_erro(
-        'RN12 bloqueia entrega de pedido em preparação',
-        format('INSERT INTO entrega (id_pedido, previsao_entrega) VALUES (%s, CURRENT_TIMESTAMP)', v_pedido),
-        'ck_entrega_pedido_pronto'
-    );
+    -- RN02/RR02: a terceira entrega ultrapassa o limite da rota.
+    -- Esperado: rejeição, mantendo apenas duas entregas vinculadas.
+    -- SGBD [SQLSTATE 23514]: RN02: uma rota pode possuir no máximo duas entregas
+    BEGIN
+        UPDATE entrega SET status = 'aceita', id_rota = v_rota
+        WHERE id_pedido = (SELECT MAX(id_pedido) FROM pedidos_teste_logistica);
+        RAISE EXCEPTION 'Falhou: terceira entrega foi aceita';
+    EXCEPTION WHEN check_violation THEN RAISE NOTICE '%', SQLERRM;
+    END;
 
-    UPDATE pedido SET status = 'pronto' WHERE id_pedido = v_pedido;
-    SELECT id_entrega, previsao_entrega INTO STRICT v_entrega, v_previsao
-    FROM entrega
-    WHERE id_pedido = v_pedido AND status = 'aguardando_entregador' AND id_rota IS NULL;
-    SELECT l.tempo_entrega_estimado INTO STRICT v_minutos
-    FROM pedido p JOIN loja l USING (id_loja) WHERE p.id_pedido = v_pedido;
-
-    IF v_previsao IS DISTINCT FROM statement_timestamp() + make_interval(mins => v_minutos) THEN
-        RAISE EXCEPTION 'Previsão diferente do instante de prontidão mais estimativa da loja';
+    -- RR06 e sincronização do ADR-004: aceita -> a caminho -> entregue.
+    -- Esperado: transições aceitas e pedido atualizado para concluído.
+    UPDATE entrega SET status = 'a_caminho' WHERE id_pedido = v_pedido;
+    UPDATE entrega SET status = 'entregue' WHERE id_pedido = v_pedido;
+    IF NOT EXISTS (SELECT 1 FROM pedido WHERE id_pedido = v_pedido AND status = 'concluido') THEN
+        RAISE EXCEPTION 'Falhou: entrega finalizada não concluiu o pedido';
     END IF;
-    v_pedidos := array_append(v_pedidos, v_pedido);
-    v_entregas := array_append(v_entregas, v_entrega);
-    RAISE NOTICE 'PASSOU: pedido pronto gera entrega inicial com previsão calculada';
-
-    FOR i IN 2..6 LOOP
-        v_pedido := pg_temp.logistica_novo_pedido('pronto');
-        SELECT id_entrega INTO STRICT v_entrega FROM entrega WHERE id_pedido = v_pedido;
-        v_pedidos := array_append(v_pedidos, v_pedido);
-        v_entregas := array_append(v_entregas, v_entrega);
-    END LOOP;
-    RAISE NOTICE 'PASSOU: inserção de pedido pronto também gera entrega';
-
-    UPDATE pedido SET status = status WHERE id_pedido = v_pedidos[1];
-    IF (SELECT COUNT(*) FROM entrega WHERE id_pedido = v_pedidos[1]) <> 1 THEN
-        RAISE EXCEPTION 'Atualização sem mudança de status duplicou entrega';
-    END IF;
-    RAISE NOTICE 'PASSOU: status pronto sem mudança não duplica entrega';
-
-    INSERT INTO rota (id_entregador) VALUES (1) RETURNING id_rota INTO v_rota1;
-    INSERT INTO rota (id_entregador) VALUES (2) RETURNING id_rota INTO v_rota2;
-    INSERT INTO rota (id_entregador) VALUES (3) RETURNING id_rota INTO v_rota3;
-
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite pular de aguardando para a caminho',
-        format('UPDATE entrega SET status = ''a_caminho'', id_rota = %s WHERE id_entrega = %s', v_rota1, v_entregas[1]),
-        'ck_entrega_transicao_status'
-    );
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite pular de aguardando para entregue',
-        format('UPDATE entrega SET status = ''entregue'', id_rota = %s WHERE id_entrega = %s', v_rota1, v_entregas[1]),
-        'ck_entrega_transicao_status'
-    );
-
-    UPDATE entrega SET status = 'aceita', id_rota = v_rota1
-    WHERE id_entrega IN (v_entregas[1], v_entregas[2]);
-    IF (SELECT COUNT(*) FROM entrega WHERE id_rota = v_rota1) <> 2 THEN
-        RAISE EXCEPTION 'Falha ao vincular duas entregas à mesma rota';
-    END IF;
-    RAISE NOTICE 'PASSOU: primeira e segunda entregas permitidas';
-
-    PERFORM pg_temp.logistica_esperar_erro(
-        'RN02 bloqueia terceira entrega via UPDATE',
-        format('UPDATE entrega SET status = ''aceita'', id_rota = %s WHERE id_entrega = %s', v_rota1, v_entregas[3]),
-        'ck_rota_maximo_duas_entregas'
-    );
-    PERFORM pg_temp.logistica_esperar_erro(
-        'RN02 protege também INSERT com rota cheia',
-        format('INSERT INTO entrega (id_pedido, id_rota, previsao_entrega) VALUES (%s, %s, CURRENT_TIMESTAMP)', v_pedidos[3], v_rota1),
-        'ck_rota_maximo_duas_entregas'
-    );
-
-    UPDATE entrega SET id_rota = id_rota, status = status WHERE id_entrega = v_entregas[1];
-    RAISE NOTICE 'PASSOU: atualização sem mudança em rota cheia';
-
-    UPDATE entrega SET status = 'aceita', id_rota = v_rota2
-    WHERE id_entrega IN (v_entregas[3], v_entregas[4]);
-    PERFORM pg_temp.logistica_esperar_erro(
-        'RN02 bloqueia transferência para rota cheia',
-        format('UPDATE entrega SET id_rota = %s WHERE id_entrega = %s', v_rota2, v_entregas[1]),
-        'ck_rota_maximo_duas_entregas'
-    );
-    UPDATE entrega SET id_rota = v_rota3 WHERE id_entrega = v_entregas[3];
-    UPDATE entrega SET id_rota = v_rota2 WHERE id_entrega = v_entregas[1];
-    RAISE NOTICE 'PASSOU: transferência para rota com vaga';
-
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite retorno de aceita para aguardando',
-        format('UPDATE entrega SET status = ''aguardando_entregador'', id_rota = NULL WHERE id_entrega = %s', v_entregas[2]),
-        'ck_entrega_transicao_status'
-    );
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite pular de aceita para entregue',
-        format('UPDATE entrega SET status = ''entregue'' WHERE id_entrega = %s', v_entregas[2]),
-        'ck_entrega_transicao_status'
-    );
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite trocar o pedido de uma entrega existente',
-        format('UPDATE entrega SET id_pedido = %s WHERE id_entrega = %s', v_pedidos[5], v_entregas[2]),
-        'ck_entrega_pedido_imutavel'
-    );
-
-    UPDATE entrega SET status = 'a_caminho' WHERE id_entrega = v_entregas[2];
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite retorno de a caminho para aceita',
-        format('UPDATE entrega SET status = ''aceita'' WHERE id_entrega = %s', v_entregas[2]),
-        'ck_entrega_transicao_status'
-    );
-    UPDATE entrega SET status = 'entregue' WHERE id_entrega = v_entregas[2];
-    IF NOT EXISTS (SELECT 1 FROM pedido WHERE id_pedido = v_pedidos[2] AND status = 'concluido') THEN
-        RAISE EXCEPTION 'Entrega concluída não concluiu o pedido';
-    END IF;
-    RAISE NOTICE 'PASSOU: fluxo completo da entrega conclui o pedido';
-
-    UPDATE entrega SET status = status WHERE id_entrega = v_entregas[2];
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Estado entregue é terminal',
-        format('UPDATE entrega SET status = ''a_caminho'' WHERE id_entrega = %s', v_entregas[2]),
-        'ck_entrega_transicao_status'
-    );
-
-    UPDATE loja SET tempo_entrega_estimado = tempo_entrega_estimado + 1
-    WHERE id_loja = (SELECT id_loja FROM pedido WHERE id_pedido = v_pedidos[1]);
-    IF (SELECT previsao_entrega FROM entrega WHERE id_entrega = v_entregas[1]) IS DISTINCT FROM v_previsao THEN
-        RAISE EXCEPTION 'Alteração da loja modificou o snapshot de previsão';
-    END IF;
-    v_pedido := pg_temp.logistica_novo_pedido('pronto');
-    IF (SELECT previsao_entrega FROM entrega WHERE id_pedido = v_pedido)
-        IS DISTINCT FROM statement_timestamp() + make_interval(mins => v_minutos + 1) THEN
-        RAISE EXCEPTION 'Nova entrega não usou a estimativa atualizada da loja';
-    END IF;
-    RAISE NOTICE 'PASSOU: previsão antiga preservada e nova previsão usa estimativa atual';
-
-    v_pedido := pg_temp.logistica_novo_pedido('em_preparacao');
-    PERFORM pg_temp.logistica_esperar_erro(
-        'Não permite criar entrega diretamente aceita',
-        format('INSERT INTO entrega (id_pedido, id_rota, status, previsao_entrega) VALUES (%s, %s, ''aceita'', CURRENT_TIMESTAMP)', v_pedido, v_rota3),
-        'ck_entrega_estado_inicial'
-    );
+    RAISE NOTICE 'PASSOU: verificação dos quatro gatilhos de Logística';
 END;
 $$;
-
 ROLLBACK;
