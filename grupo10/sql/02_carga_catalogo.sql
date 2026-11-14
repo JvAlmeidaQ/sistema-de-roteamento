@@ -1,29 +1,3 @@
-/*
-============================================================================
-SUBDOMÍNIO: CATÁLOGO
-Arquivo: 02_carga_catalogo.sql
-SGBD: PostgreSQL 18 (compatível com PostgreSQL 14+)
-Executar após 01_esquema_catalogo.sql, em banco recém-criado.
-
-Carga gerada em lote: 375 registros
-- 3 Pessoa
-- 3 Lojista
-- 3 Endereco
-- 3 Loja
-- 33 Categoria
-- 150 Produto
-- 180 Produto_Categoria
-
-Em vez de escrever 150 produtos e 180 associações individualmente,
-o script usa conjuntos-base, CROSS JOIN, generate_series/unnest e INSERT
-... SELECT para gerar os registros.
-
-A carga pressupõe tabelas vazias e IDs de Pessoa/Lojista/Endereco/Loja
-iniciando normalmente pelas colunas IDENTITY. As associações são feitas
-por loja e nome da categoria, sem depender de IDs fixos de Categoria.
-============================================================================
-*/
-
 BEGIN;
 
 -- ============================================================================
