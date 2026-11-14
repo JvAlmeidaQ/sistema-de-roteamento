@@ -1,17 +1,3 @@
--- ============================================================================
--- SUBDOMÍNIO: CATÁLOGO | PostgreSQL 18
--- Executar após 01_esquema_catalogo.sql e 02_carga_catalogo.sql.
---
--- PREMISSAS SOBRE A CARGA:
--- Loja 1, Lojista 1, Endereco 1 e Produto 1 existem.
--- Produto 1 e Categoria 1 pertencem à Loja 1.
--- Loja 2 e Categoria 2 existem; Categoria 2 pertence à Loja 2.
--- O CNPJ 12345678000195 já está cadastrado em uma Loja.
--- Ajuste os valores literais caso os IDs/CNPJ da sua carga sejam diferentes.
---
--- Os erros são intencionais. Execute em autocommit e sem ON_ERROR_STOP=1.
--- ============================================================================
-
 -- 1. INSERT
 
 -- RN10 — CNPJ deve conter exatamente 14 dígitos numéricos.
@@ -125,6 +111,3 @@ DELETE FROM lojista WHERE id_pessoa = 1;
 -- Esperado: rejeição pela FK fk_loja_endereco.
 -- SQLSTATE esperado: 23503 (foreign_key_violation).
 DELETE FROM endereco WHERE id_endereco = 1;
-
--- RN11 — Validação dos dígitos verificadores do CNPJ é responsabilidade
--- da aplicação; o DDL verifica somente o formato de 14 dígitos (RN10).
