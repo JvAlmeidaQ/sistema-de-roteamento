@@ -4,6 +4,7 @@ Thumbs.db
 
 # Arquivo de backup
 justificativas.tex
+grupo10/.$modelo_sistema_roteamento.drawio.bkp
 
 # Ambientes locais e containers
 .env
@@ -23,3 +24,4 @@ __pycache__/
 # IDEs
 .vscode/
 .idea/
+
