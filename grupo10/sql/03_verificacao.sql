@@ -2,6 +2,7 @@
 -- RN10 / RR14: O CPF deve conter apenas números e ter exatamente 11 dígitos.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_pessoa_cpf (CPF com letra).
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO pessoa (nome, cpf, email)
 VALUES ('Teste', '0000000000A', 'teste@exemplo.com');
@@ -15,7 +16,8 @@ VALUES ('Teste', '0000000000A', 'teste@exemplo.com');
 -- RN10 / RR14: O CPF deve conter apenas números e ter exatamente 11 dígitos.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_pessoa_cpf (CPF com 10 dígitos).
-
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
 INSERT INTO pessoa (nome, cpf, email)
 VALUES ('Teste', '1234567890', 'teste@exemplo.com');
 
@@ -29,6 +31,8 @@ VALUES ('Teste', '1234567890', 'teste@exemplo.com');
 --       (UPDATE inválido).
 -- Resultado esperado: O banco deve rejeitar a alteração, pois viola a check constraint
 --                     ck_pessoa_cpf (CPF com máscara).
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
 UPDATE pessoa
 SET cpf = '000.000.001'
 WHERE id_pessoa = 1;
@@ -39,10 +43,37 @@ WHERE id_pessoa = 1;
 
 
 -- ---------------------------------------------------------------------------------
--- Chave candidata de Pessoa (Seção 2.4.1): o CPF é único — duas pessoas não
---       podem ter o mesmo CPF.
+-- Obrigatoriedade / Domínio de Pessoa: O nome da pessoa não pode ser vazio ou
+--       composto apenas por espaços (ck_pessoa_nome).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola ck_pessoa_nome.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('   ', '99999999991', 'nomevazio@exemplo.com');
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_nome"
+-- DETAIL:  Failing row contains (303,    , 99999999991, nomevazio@exemplo.com).
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio de Pessoa: O e-mail deve possuir formato válido (ck_pessoa_email).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola ck_pessoa_email.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pessoa (nome, cpf, email)
+VALUES ('Teste Email', '99999999992', 'email_invalido');
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pessoa" violates check constraint "ck_pessoa_email"
+-- DETAIL:  Failing row contains (304, Teste Email, 99999999992, email_invalido).
+
+
+-- ---------------------------------------------------------------------------------
+-- RN10 / RR14 (Seção 2): o CPF é único — duas pessoas não podem ter o mesmo CPF.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a unique constraint
 --                     uq_pessoa_cpf (CPF da pessoa 1).
+-- SQLSTATE esperado: 23505 (unique_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO pessoa (nome, cpf, email)
 VALUES ('Teste', '00000000001', 'teste@exemplo.com');
@@ -53,9 +84,10 @@ VALUES ('Teste', '00000000001', 'teste@exemplo.com');
 
 
 -- ---------------------------------------------------------------------------------
--- Chave candidata de Pessoa (Seção 2.4.1): o e-mail é único (UPDATE inválido).
+-- Chave candidata de Pessoa (Seção 2): o e-mail é único (UPDATE inválido).
 -- Resultado esperado: O banco deve rejeitar a alteração, pois viola a unique constraint
 --                     uq_pessoa_email (pessoa 2 recebendo o e-mail da pessoa 1).
+-- SQLSTATE esperado: 23505 (unique_violation).
 -- ---------------------------------------------------------------------------------
 UPDATE pessoa
 SET email = 'pessoa1@exemplo.com'
@@ -70,6 +102,7 @@ WHERE id_pessoa = 2;
 -- RR14: O CEP deve ser numérico e ter exatamente 8 dígitos.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_endereco_cep (CEP com hífen).
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
 VALUES ('Rua Teste', '1', 'Centro', '36000-00', 'Juiz de Fora', 'MG');
@@ -83,6 +116,7 @@ VALUES ('Rua Teste', '1', 'Centro', '36000-00', 'Juiz de Fora', 'MG');
 -- RR14: A sigla do estado (UF) deve ter 2 caracteres.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_endereco_estado (UF com 1 caractere).
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
 VALUES ('Rua Teste', '1', 'Centro', '36000000', 'Juiz de Fora', 'M');
@@ -93,10 +127,41 @@ VALUES ('Rua Teste', '1', 'Centro', '36000000', 'Juiz de Fora', 'M');
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.3.1): Telefone.id_pessoa References Pessoa.id_pessoa.
+-- Chave candidata de Endereco: A combinação (logradouro, numero, cep) deve ser única.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a unique constraint
+--                     uq_endereco_logradouro_numero_cep (duplicando o endereço 1).
+-- SQLSTATE esperado: 23505 (unique_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO endereco (logradouro, numero, bairro, cep, cidade, estado)
+SELECT logradouro, numero, bairro, cep, cidade, estado
+FROM endereco
+WHERE id_endereco = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uq_endereco_logradouro_numero_cep"
+-- DETAIL:  Key (logradouro, numero, cep)=(Avenida Barão do Rio Branco, 11, 36025000) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio de Telefone: O número de telefone deve conter apenas 10 ou 11 dígitos
+--       numéricos (ck_telefone_numero).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola ck_telefone_numero.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO telefone (id_pessoa, numero, tipo)
+VALUES (1, '329999', 'celular');
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "telefone" violates check constraint "ck_telefone_numero"
+-- DETAIL:  Failing row contains (1, 329999, celular).
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade referencial (Seção 2): Telefone.id_pessoa referencia Pessoa.id_pessoa.
 --       Todo telefone pertence a uma pessoa cadastrada.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     fk_telefone_pessoa (pessoa 999999 não existe).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO telefone (id_pessoa, numero, tipo)
 VALUES (999999, '32999999999', 'celular');
@@ -107,10 +172,11 @@ VALUES (999999, '32999999999', 'celular');
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.3.1): a chave de Telefone é (id_pessoa, numero).
+-- Unicidade de Telefone (Seção 2): a chave de Telefone é (id_pessoa, numero).
 --       A mesma pessoa não pode cadastrar o mesmo número duas vezes.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
 --                     pk_telefone (celular já cadastrado da pessoa 1).
+-- SQLSTATE esperado: 23505 (unique_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO telefone (id_pessoa, numero, tipo)
 VALUES (1, '32990000001', 'celular');
@@ -121,10 +187,11 @@ VALUES (1, '32990000001', 'celular');
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.3.1): Pessoa_Endereco.id_endereco References
+-- Integridade referencial (Seção 2): Pessoa_Endereco.id_endereco referencia
 --       Endereco.id_endereco. Só é possível vincular uma pessoa a um endereço cadastrado.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     fk_pessoa_endereco_endereco (endereço 999999 não existe).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO pessoa_endereco (id_pessoa, id_endereco)
 VALUES (1, 999999);
@@ -135,10 +202,11 @@ VALUES (1, 999999);
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.3.1): Entregador.id_pessoa References Pessoa.id_pessoa.
+-- Integridade referencial (Seção 2): Entregador.id_pessoa referencia Pessoa.id_pessoa.
 --       O papel de entregador só pode ser atribuído a uma pessoa cadastrada.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     fk_entregador_pessoa (pessoa 999999 não existe).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO entregador (id_pessoa, tipo_veiculo)
 VALUES (999999, 'moto');
@@ -149,10 +217,11 @@ VALUES (999999, 'moto');
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.3.1): Lojista.id_pessoa References Pessoa.id_pessoa.
+-- Integridade referencial (Seção 2): Lojista.id_pessoa referencia Pessoa.id_pessoa.
 --       O papel de lojista só pode ser atribuído a uma pessoa cadastrada.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     fk_lojista_pessoa (pessoa 999999 não existe).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO lojista (id_pessoa)
 VALUES (999999);
@@ -163,12 +232,13 @@ VALUES (999999);
 
 
 -- ---------------------------------------------------------------------------------
--- Endereço atual do cliente (Seção 2.3.2): a chave estrangeira composta
+-- Endereço atual do cliente (Seção 2): a chave estrangeira composta
 --       (id_pessoa, id_endereco_atual) References Pessoa_Endereco garante que o
 --       endereço atual seja um dos endereços cadastrados pela própria pessoa.
 --       O endereço 2 existe, mas pertence à pessoa 2, e não ao cliente 101.
 -- Resultado esperado: O banco deve rejeitar a alteração, pois viola a chave estrangeira
 --                     composta fk_cliente_endereco_atual.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 UPDATE cliente
 SET id_endereco_atual = 2
@@ -180,10 +250,11 @@ WHERE id_pessoa = 101;
 
 
 -- ---------------------------------------------------------------------------------
--- Endereço atual do cliente (Seção 2.3.2): mesma regra, no cadastro de um novo
+-- Endereço atual do cliente (Seção 2): mesma regra, no cadastro de um novo
 --       cliente. A pessoa 1 não possui o endereço 2.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     composta fk_cliente_endereco_atual.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO cliente (id_pessoa, id_endereco_atual)
 VALUES (1, 2);
@@ -196,9 +267,10 @@ VALUES (1, 2);
 -- ---------------------------------------------------------------------------------
 -- Integridade Referencial (DELETE): um endereço vinculado a alguma pessoa não
 --       pode ser excluído (ON DELETE RESTRICT em fk_pessoa_endereco_endereco).
---       Os endereços são imutáveis e compartilhados entre moradores (Seção 2.3.2).
+--       Os endereços são imutáveis e compartilhados entre moradores (Seção 2).
 -- Resultado esperado: O banco deve rejeitar a exclusão por violação de chave estrangeira
 --                     (fk_pessoa_endereco_endereco).
+-- SQLSTATE esperado: 23001 (restrict_violation).
 -- ---------------------------------------------------------------------------------
 DELETE FROM endereco
 WHERE id_endereco = 1;
@@ -214,6 +286,7 @@ WHERE id_endereco = 1;
 --       (ON DELETE NO ACTION em fk_cliente_endereco_atual).
 -- Resultado esperado: O banco deve rejeitar a exclusão por violação da chave estrangeira
 --                     composta (fk_cliente_endereco_atual).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 DELETE FROM pessoa_endereco
 WHERE id_pessoa = 101 AND id_endereco = 101;
@@ -221,6 +294,22 @@ WHERE id_pessoa = 101 AND id_endereco = 101;
 -- ERRO DO BANCO:
 -- ERROR:  update or delete on table "pessoa_endereco" violates foreign key constraint "fk_cliente_endereco_atual" on table "cliente"
 -- DETAIL:  Key (id_pessoa, id_endereco)=(101, 101) is still referenced from table "cliente".
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial (ON UPDATE RESTRICT): alterar a PK de pessoa_endereco
+--       enquanto ela é referenciada por cliente.id_endereco_atual é bloqueado.
+-- Resultado esperado: O banco deve rejeitar a alteração por violação da FK
+--                     fk_cliente_endereco_atual.
+-- SQLSTATE esperado: 23001 (restrict_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE pessoa_endereco
+SET id_endereco = 2
+WHERE id_pessoa = 101 AND id_endereco = 101;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "pessoa_endereco" violates RESTRICT setting of foreign key constraint "fk_cliente_endereco_atual" on table "cliente"
+-- DETAIL:  Key (id_pessoa, id_endereco)=(101, 101) is referenced from table "cliente".
 
 
 
@@ -233,9 +322,9 @@ WHERE id_pessoa = 101 AND id_endereco = 101;
 -- =================================================================================
 
 -- ---------------------------------------------------------------------------------
--- RN10 — CNPJ deve conter exatamente 14 dígitos numéricos.
+-- RN10 — CNPJ deve conter exatamente 14 dígitos numéricos (caractere inválido).
 -- Esperado: rejeição pela CHECK ck_loja_cnpj.
--- Resultado: new row for relation "loja" violates check constraint "ck_loja_cnpj"
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO loja (id_lojista, id_endereco, cnpj, nome, telefone,
                   status_funcionamento, tempo_entrega_estimado, taxa_entrega)
@@ -248,8 +337,23 @@ VALUES (1, 1, '1234567890123X', 'LOJA CNPJ INVALIDO', '(32) 3000-0001',
 
 
 -- ---------------------------------------------------------------------------------
+-- RN10 — CNPJ deve conter exatamente 14 dígitos numéricos (13 dígitos).
+-- Esperado: rejeição pela CHECK ck_loja_cnpj.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO loja (id_lojista, id_endereco, cnpj, nome, telefone,
+                  status_funcionamento, tempo_entrega_estimado, taxa_entrega)
+VALUES (81, 1, '1234567890123', 'LOJA CNPJ 13 DIGITOS', '(32) 3000-0001',
+        'aberta', 30, 5.00);
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "loja" violates check constraint "ck_loja_cnpj"
+-- DETAIL:  Failing row contains (122, 81, 1, null, 1234567890123 , LOJA CNPJ 13 DIGITOS, (32) 3000-0001, aberta, 30, 5.00).
+
+
+-- ---------------------------------------------------------------------------------
 -- Regra de integridade — CNPJ deve ser único.
--- Esperado: rejeição pela UNIQUE uk_loja_cnpj.
+-- Esperado: rejeição pela UNIQUE uq_loja_cnpj.
 -- SQLSTATE esperado: 23505 (unique_violation).
 -- O CNPJ informado precisa ser igual ao de uma loja já cadastrada.
 -- ---------------------------------------------------------------------------------
@@ -259,7 +363,7 @@ VALUES (1, 1, '12345678000195', 'LOJA CNPJ DUPLICADO', '(32) 3000-0002',
         'aberta', 30, 5.00);
 
 -- ERRO DO BANCO:
--- ERROR:  duplicate key value violates unique constraint "uk_loja_cnpj"
+-- ERROR:  duplicate key value violates unique constraint "uq_loja_cnpj"
 -- DETAIL:  Key (cnpj)=(12345678000195) already exists.
 
 
@@ -333,7 +437,7 @@ VALUES (1, 1, '98765432000270', 'LOJA STATUS INVALIDO', '(32) 3000-0004',
 
 
 -- ---------------------------------------------------------------------------------
--- ADR-001 — Produto e Categoria associados devem pertencer à mesma Loja.
+-- Regra de integridade (Seção 2) — Produto e Categoria associados devem pertencer à mesma Loja.
 -- Esperado: rejeição pela FK composta fk_produto_categoria_categoria.
 -- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- Premissa: Produto 1 pertence à Loja 1 e Categoria 6 à Loja 2.
@@ -389,7 +493,7 @@ UPDATE produto SET nome = NULL WHERE id_produto = 1;
 
 
 -- ---------------------------------------------------------------------------------
--- ADR-001 — A associação não pode apontar para loja diferente da loja
+-- Regra de integridade (Seção 2) — A associação não pode apontar para loja diferente da loja
 -- à qual Produto 1 e Categoria 1 pertencem.
 -- Esperado: rejeição por uma das FKs compostas de Produto_Categoria.
 -- SQLSTATE esperado: 23503 (foreign_key_violation).
@@ -476,6 +580,7 @@ DELETE FROM endereco WHERE id_endereco = 1;
 -- RR10: Coerência aritmética dos totais do Pedido (valor_total = subtotal + taxa_entrega + taxa_servico)
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_pedido_valor_total.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
                     subtotal, taxa_entrega, taxa_servico, valor_total)
@@ -483,13 +588,14 @@ VALUES (1, 101, 101, 'pix', 80.00, 7.00, 5.00, 100.00);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "pedido" violates check constraint "ck_pedido_valor_total"
--- DETAIL:  Failing row contains (200001, 1, 101, 101, null, null, null, solicitado, 2026-11-15 02:21:00.379717+00, pix, 80.00, 7.00, 5.00, 100.00).
+-- DETAIL:  Failing row contains (200001, 1, 101, 101, null, null, null, solicitado, ..., pix, 80.00, 7.00, 5.00, 100.00).
 
 
 -- ---------------------------------------------------------------------------------
 -- RR10 / RN09: Subtotal negativo em Pedido (UPDATE inválido)
 -- Resultado esperado: O banco deve rejeitar a alteração, pois viola a check constraint
 --                     ck_pedido_subtotal.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 UPDATE pedido
 SET subtotal = -10.00
@@ -497,7 +603,72 @@ WHERE id_pedido = 1;
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "pedido" violates check constraint "ck_pedido_subtotal"
--- DETAIL:  Failing row contains (1, 59, 70, 70, null, Próximo à padaria, null, pronto, 2026-08-02 16:55:50.004124+00, dinheiro, -10.00, 10.75, 2.50, 39.75).
+-- DETAIL:  Failing row contains (...).
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio de Pedido: Taxa de entrega não pode ser negativa (ck_pedido_taxa_entrega).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola ck_pedido_taxa_entrega.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
+                    subtotal, taxa_entrega, taxa_servico, valor_total)
+VALUES (1, 101, 101, 'pix', 50.00, -1.00, 2.50, 51.50);
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pedido" violates check constraint "ck_pedido_taxa_entrega"
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio de Pedido: Taxa de serviço não pode ser negativa (ck_pedido_taxa_servico).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola ck_pedido_taxa_servico.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
+                    subtotal, taxa_entrega, taxa_servico, valor_total)
+VALUES (1, 101, 101, 'pix', 50.00, 5.00, -1.00, 54.00);
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "pedido" violates check constraint "ck_pedido_taxa_servico"
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial de Pedido: Loja inexistente (fk_pedido_loja).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola fk_pedido_loja.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
+                    subtotal, taxa_entrega, taxa_servico, valor_total)
+VALUES (999999, 101, 101, 'pix', 50.00, 5.00, 2.50, 57.50);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "pedido" violates foreign key constraint "fk_pedido_loja"
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial de Pedido: Cliente inexistente (fk_pedido_cliente).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola fk_pedido_cliente.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
+                    subtotal, taxa_entrega, taxa_servico, valor_total)
+VALUES (1, 999999, 101, 'pix', 50.00, 5.00, 2.50, 57.50);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "pedido" violates foreign key constraint "fk_pedido_cliente"
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial de Pedido: Endereço inexistente (fk_pedido_endereco).
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola fk_pedido_endereco.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
+                    subtotal, taxa_entrega, taxa_servico, valor_total)
+VALUES (1, 101, 999999, 'pix', 50.00, 5.00, 2.50, 57.50);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "pedido" violates foreign key constraint "fk_pedido_endereco"
 
 
 -- ---------------------------------------------------------------------------------
@@ -505,6 +676,7 @@ WHERE id_pedido = 1;
 --       deve ser igual ao valor total pago pelo pedido.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_divisao_pagamento_soma.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO divisao_pagamento (id_pedido, valor_total, parcela_loja,
                                comissao_entregador, taxa_plataforma)
@@ -512,32 +684,50 @@ VALUES (1, 100.00, 80.00, 10.00, 5.00);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "divisao_pagamento" violates check constraint "ck_divisao_pagamento_soma"
--- DETAIL:  Failing row contains (1, 100.00, 5.00, 80.00, 10.00, 2026-11-15 02:21:00.380202+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio de Divisão de Pagamento: Valores negativos para parcela_loja,
+--       comissao_entregador e taxa_plataforma são proibidos.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO divisao_pagamento (id_pedido, valor_total, parcela_loja,
+                               comissao_entregador, taxa_plataforma)
+VALUES (1, 10.00, -5.00, 10.00, 5.00);
+
+INSERT INTO divisao_pagamento (id_pedido, valor_total, parcela_loja,
+                               comissao_entregador, taxa_plataforma)
+VALUES (1, 10.00, 10.00, -5.00, 5.00);
+
+INSERT INTO divisao_pagamento (id_pedido, valor_total, parcela_loja,
+                               comissao_entregador, taxa_plataforma)
+VALUES (1, 10.00, 10.00, 5.00, -5.00);
 
 
 -- ---------------------------------------------------------------------------------
 -- RN07: Um pedido não pode misturar Produtos de lojas diferentes.
 --       Todos os itens do pedido devem pertencer ao catálogo da mesma Loja.
--- Cenário A: Pedido 272 é da Loja 1 e Produto 6 é da Loja 2 (informando id_loja = 2).
+-- Cenário A: Pedido da Loja 1 e Produto 6 (que pertence à Loja 2), informando id_loja = 2.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a FK composta
 --                     fk_item_pedido_loja.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO item_pedido (id_pedido, id_produto, id_loja, quantidade, valor_unitario)
-VALUES (272, 6, 2, 1, 25.00);
+VALUES ((SELECT id_pedido FROM pedido WHERE id_loja = 1 ORDER BY id_pedido LIMIT 1), 6, 2, 1, 25.00);
 
 -- ERRO DO BANCO:
 -- ERROR:  insert or update on table "item_pedido" violates foreign key constraint "fk_item_pedido_loja"
--- DETAIL:  Key (id_loja, id_pedido)=(2, 272) is not present in table "pedido".
 
 
 -- ---------------------------------------------------------------------------------
 -- RN07: Um pedido não pode misturar Produtos de lojas diferentes (Cenário B).
--- Cenário B: Pedido 272 é da Loja 1 e Produto 6 é da Loja 2 (tentando forçar id_loja = 1).
+-- Cenário B: Pedido da Loja 1 e Produto 6 (da Loja 2), tentando forçar id_loja = 1.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a FK composta
 --                     fk_item_produto_loja.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO item_pedido (id_pedido, id_produto, id_loja, quantidade, valor_unitario)
-VALUES (272, 6, 1, 1, 25.00);
+VALUES ((SELECT id_pedido FROM pedido WHERE id_loja = 1 ORDER BY id_pedido LIMIT 1), 6, 1, 1, 25.00);
 
 -- ERRO DO BANCO:
 -- ERROR:  insert or update on table "item_pedido" violates foreign key constraint "fk_item_produto_loja"
@@ -549,53 +739,65 @@ VALUES (272, 6, 1, 1, 25.00);
 --       obrigatoriamente um número inteiro de 1 a 5.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_avaliacao_loja_nota.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO avaliacao_loja (id_pedido, nota, comentario)
 VALUES (1, -5, 'muito bom o lanche');
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "avaliacao_loja" violates check constraint "ck_avaliacao_loja_nota"
--- DETAIL:  Failing row contains (1, -5, muito bom o lanche, 2026-11-15 02:21:00.380912+00).
 
 
 -- ---------------------------------------------------------------------------------
 -- RN06: Nota fora do intervalo 1 a 5 na Avaliação do Entregador (UPDATE inválido).
 -- Resultado esperado: O banco deve rejeitar a alteração, pois viola a check constraint
 --                     ck_avaliacao_entregador_nota.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 UPDATE avaliacao_entregador
 SET nota = 6
-WHERE id_pedido = 54411;
+WHERE id_pedido = (SELECT id_pedido FROM avaliacao_entregador ORDER BY id_pedido LIMIT 1);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "avaliacao_entregador" violates check constraint "ck_avaliacao_entregador_nota"
--- DETAIL:  Failing row contains (54411, 6, Derramou meu refrigerante., 2026-06-10 11:08:41.914046+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Unicidade de Avaliação (PK): Cada Pedido pode ter no máximo 1 avaliação de loja
+--       e 1 avaliação de entregador (pk_avaliacao_loja e pk_avaliacao_entregador).
+-- SQLSTATE esperado: 23505 (unique_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO avaliacao_loja (id_pedido, nota, comentario)
+VALUES ((SELECT id_pedido FROM avaliacao_loja ORDER BY id_pedido LIMIT 1), 5, 'duplicada');
+
+INSERT INTO avaliacao_entregador (id_pedido, nota, comentario)
+VALUES ((SELECT id_pedido FROM avaliacao_entregador ORDER BY id_pedido LIMIT 1), 5, 'duplicada');
 
 
 -- ---------------------------------------------------------------------------------
 -- RN09: A quantidade comprada no Item do Pedido deve ser estritamente maior que zero.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_item_pedido_quantidade.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO item_pedido (id_pedido, id_produto, id_loja, quantidade, valor_unitario)
-VALUES (272, 1, 1, 0, 33.00);
+VALUES ((SELECT id_pedido FROM pedido WHERE id_loja = 1 ORDER BY id_pedido LIMIT 1), 1, 1, 0, 33.00);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "item_pedido" violates check constraint "ck_item_pedido_quantidade"
--- DETAIL:  Failing row contains (272, 1, 1, 0, 33.00).
 
 
 -- ---------------------------------------------------------------------------------
 -- RN09: O valor unitário no Item do Pedido deve ser estritamente maior que zero.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_item_pedido_valor_unitario.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO item_pedido (id_pedido, id_produto, id_loja, quantidade, valor_unitario)
-VALUES (272, 1, 1, 2, -33.00);
+VALUES ((SELECT id_pedido FROM pedido WHERE id_loja = 1 ORDER BY id_pedido LIMIT 1), 1, 1, 2, -33.00);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "item_pedido" violates check constraint "ck_item_pedido_valor_unitario"
--- DETAIL:  Failing row contains (272, 1, 1, 2, -33.00).
 
 
 -- ---------------------------------------------------------------------------------
@@ -603,13 +805,13 @@ VALUES (272, 1, 1, 2, -33.00);
 -- itens ou divisão de pagamento vinculados.
 -- Resultado esperado: O banco deve rejeitar a exclusão por violação de chave estrangeira
 --                     (fk_item_pedido_loja / fk_divisao_pagamento_pedido).
+-- SQLSTATE esperado: 23001 (restrict_violation).
 -- ---------------------------------------------------------------------------------
 DELETE FROM pedido
 WHERE id_pedido = 1;
 
 -- ERRO DO BANCO:
--- ERROR:  update or delete on table "pedido" violates foreign key constraint "fk_item_pedido_loja" on table "item_pedido"
--- DETAIL:  Key (id_loja, id_pedido)=(59, 1) is still referenced from table "item_pedido".
+-- ERROR:  update or delete on table "pedido" violates RESTRICT setting of foreign key constraint "fk_item_pedido_loja" on table "item_pedido"
 
 
 
@@ -634,16 +836,15 @@ VALUES (1, 1);
 
 
 -- ---------------------------------------------------------------------------------
--- ADR-005 / Modelo lógico: associação Pedido-Entrega 1:1 (uq_entrega_pedido).
--- Premissa: pedido 3 já possui entrega cadastrada (id_entrega = 1).
--- Resultado esperado: rejeição pela UNIQUE uq_entrega_pedido (SQLSTATE 23505).
+-- RN03 / RR05 (Seção 2): associação Pedido-Entrega 1:1 (uq_entrega_pedido).
+-- Resultado esperado: rejeição pela UNIQUE uq_entrega_pedido.
+-- SQLSTATE esperado: 23505 (unique_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO entrega (id_pedido, previsao_entrega)
-VALUES (3, CURRENT_TIMESTAMP);
+VALUES ((SELECT id_pedido FROM entrega ORDER BY id_pedido LIMIT 1), CURRENT_TIMESTAMP);
 
 -- ERRO DO BANCO:
 -- ERROR:  duplicate key value violates unique constraint "uq_entrega_pedido"
--- DETAIL:  Key (id_pedido)=(3) already exists.
 
 
 -- ---------------------------------------------------------------------------------
@@ -715,31 +916,29 @@ WHERE id_rota = 1;
 
 
 -- ---------------------------------------------------------------------------------
--- ADR-005: entrega com status diferente de 'aguardando_entregador' exige rota preenchida.
--- Premissa: entrega 1 está 'entregue' e vinculada a uma rota.
--- Resultado esperado: rejeição pela CHECK ck_entrega_status_rota (SQLSTATE 23514).
+-- RN03 / RR05 (Seção 2): entrega com status diferente de 'aguardando_entregador' exige rota preenchida.
+-- Resultado esperado: rejeição pela CHECK ck_entrega_status_rota.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 UPDATE entrega
 SET id_rota = NULL
-WHERE id_entrega = 1;
+WHERE id_entrega = (SELECT id_entrega FROM entrega WHERE status <> 'aguardando_entregador' ORDER BY id_entrega LIMIT 1);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "entrega" violates check constraint "ck_entrega_status_rota"
--- DETAIL:  Failing row contains (1, 3, null, entregue, 2026-11-14 03:39:03.255907+00).
 
 
 -- ---------------------------------------------------------------------------------
--- ADR-005: entrega 'aguardando_entregador' exige id_rota NULL.
--- Premissa: entrega 1 possui id_rota preenchido.
--- Resultado esperado: rejeição pela CHECK ck_entrega_status_rota (SQLSTATE 23514).
+-- RN03 / RR05 (Seção 2): entrega 'aguardando_entregador' exige id_rota NULL.
+-- Resultado esperado: rejeição pela CHECK ck_entrega_status_rota.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 UPDATE entrega
 SET status = 'aguardando_entregador'
-WHERE id_entrega = 1;
+WHERE id_entrega = (SELECT id_entrega FROM entrega WHERE id_rota IS NOT NULL ORDER BY id_entrega LIMIT 1);
 
 -- ERRO DO BANCO:
 -- ERROR:  new row for relation "entrega" violates check constraint "ck_entrega_status_rota"
--- DETAIL:  Failing row contains (1, 3, 10655, aguardando_entregador, 2026-11-14 03:39:03.255907+00).
 
 
 -- ---------------------------------------------------------------------------------
@@ -778,11 +977,12 @@ WHERE id_rota = 1;
 -- =================================================================================
 
 -- ---------------------------------------------------------------------------------
--- RN04 / ADR-004 (Seção 2.5): A chave primária de Historico_Pedido é composta por
+-- RN04 / RR11 (Seção 2): A chave primária de Historico_Pedido é composta por
 --        (id_pedido, status). Cada estado ocorre no máximo uma vez por pedido na
 --        trilha cronológica.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
 --                     pk_historico_pedido (status 'solicitado' já registrado).
+-- SQLSTATE esperado: 23505 (unique_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_pedido (id_pedido, status, data_hora)
 VALUES (1, 'solicitado', CURRENT_TIMESTAMP);
@@ -793,11 +993,12 @@ VALUES (1, 'solicitado', CURRENT_TIMESTAMP);
 
 
 -- ---------------------------------------------------------------------------------
--- RN04 / ADR-004 (Seção 2.5): A chave primária de Historico_Entrega é composta por
+-- RN04 / RR11 (Seção 2): A chave primária de Historico_Entrega é composta por
 --        (id_entrega, status). Cada estado logístico ocorre no máximo uma vez por
 --        entrega na trilha cronológica.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
 --                     pk_historico_entrega (status 'aguardando_entregador' já existe).
+-- SQLSTATE esperado: 23505 (unique_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_entrega (id_entrega, status, data_hora)
 VALUES (1, 'aguardando_entregador', CURRENT_TIMESTAMP);
@@ -808,11 +1009,11 @@ VALUES (1, 'aguardando_entregador', CURRENT_TIMESTAMP);
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.5): Historico_Pedido.id_pedido References
---        Pedido.id_pedido. Todo registro de auditoria comercial deve pertencer a
+-- RN04 / RR11 (Seção 2): Historico_Pedido.id_pedido referencia Pedido.id_pedido. Todo registro de auditoria comercial deve pertencer a
 --        um pedido existente.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     fk_historico_pedido_pedido (pedido 999999 não existe).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_pedido (id_pedido, status, data_hora)
 VALUES (999999, 'solicitado', CURRENT_TIMESTAMP);
@@ -823,11 +1024,11 @@ VALUES (999999, 'solicitado', CURRENT_TIMESTAMP);
 
 
 -- ---------------------------------------------------------------------------------
--- Esquema relacional (Seção 2.5): Historico_Entrega.id_entrega References
---        Entrega.id_entrega. Todo registro de auditoria logística deve pertencer a
+-- RN04 / RR11 (Seção 2): Historico_Entrega.id_entrega referencia Entrega.id_entrega. Todo registro de auditoria logística deve pertencer a
 --        uma entrega existente.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
 --                     fk_historico_entrega_entrega (entrega 999999 não existe).
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_entrega (id_entrega, status, data_hora)
 VALUES (999999, 'aguardando_entregador', CURRENT_TIMESTAMP);
@@ -838,40 +1039,43 @@ VALUES (999999, 'aguardando_entregador', CURRENT_TIMESTAMP);
 
 
 -- ---------------------------------------------------------------------------------
--- Domínio temporal (Seção 2.5): O carimbo de data e hora (data_hora) de um evento
+-- RN08 / RR11 (Seção 2): O carimbo de data e hora (data_hora) de um evento
 --        de auditoria comercial não pode ser anterior ao início de operação da
 --        plataforma ('2020-01-01 00:00:00+00').
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
---                     chk_historico_pedido_data_hora.
+--                     ck_historico_pedido_data_hora.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_pedido (id_pedido, status, data_hora)
 VALUES (1, 'concluido', '1999-12-31 23:59:59+00');
 
 -- ERRO DO BANCO:
--- ERROR:  new row for relation "historico_pedido" violates check constraint "chk_historico_pedido_data_hora"
+-- ERROR:  new row for relation "historico_pedido" violates check constraint "ck_historico_pedido_data_hora"
 -- DETAIL:  Failing row contains (1, concluido, 1999-12-31 23:59:59+00).
 
 
 -- ---------------------------------------------------------------------------------
--- Domínio temporal (Seção 2.5): O carimbo de data e hora (data_hora) de um evento
+-- RN08 / RR11 (Seção 2): O carimbo de data e hora (data_hora) de um evento
 --        de auditoria logística não pode ser anterior ao início de operação da
 --        plataforma ('2020-01-01 00:00:00+00').
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
---                     chk_historico_entrega_data_hora.
+--                     ck_historico_entrega_data_hora.
+-- SQLSTATE esperado: 23514 (check_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_entrega (id_entrega, status, data_hora)
 VALUES (1, 'entregue', '1999-12-31 23:59:59+00');
 
 -- ERRO DO BANCO:
--- ERROR:  new row for relation "historico_entrega" violates check constraint "chk_historico_entrega_data_hora"
+-- ERROR:  new row for relation "historico_entrega" violates check constraint "ck_historico_entrega_data_hora"
 -- DETAIL:  Failing row contains (1, entregue, 1999-12-31 23:59:59+00).
 
 
 -- ---------------------------------------------------------------------------------
--- Domínio ENUM (Seção 1): O status registrado em Historico_Pedido deve pertencer
+-- RR06 (Seção 2): O status registrado em Historico_Pedido deve pertencer
 --        estritamente aos valores válidos do tipo ENUM status_pedido.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois 'cancelado' não faz
 --                     parte do domínio status_pedido.
+-- SQLSTATE esperado: 22P02 (invalid_text_representation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_pedido (id_pedido, status, data_hora)
 VALUES (1, 'cancelado', CURRENT_TIMESTAMP);
@@ -882,10 +1086,11 @@ VALUES (1, 'cancelado', CURRENT_TIMESTAMP);
 
 
 -- ---------------------------------------------------------------------------------
--- Domínio ENUM (Seção 1): O status registrado em Historico_Entrega deve pertencer
+-- RR06 (Seção 2): O status registrado em Historico_Entrega deve pertencer
 --        estritamente aos valores válidos do tipo ENUM status_entrega.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois 'extraviada' não faz
 --                     parte do domínio status_entrega.
+-- SQLSTATE esperado: 22P02 (invalid_text_representation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_entrega (id_entrega, status, data_hora)
 VALUES (1, 'extraviada', CURRENT_TIMESTAMP);
@@ -896,24 +1101,26 @@ VALUES (1, 'extraviada', CURRENT_TIMESTAMP);
 
 
 -- ---------------------------------------------------------------------------------
--- Obrigatoriedade de dados (Seção 2.5): Nenhum evento de auditoria pode ser
+-- RN04 / RR11 (Seção 2): Nenhum evento de auditoria pode ser
 --        inserido sem o status atingido pelo pedido (NOT NULL).
 -- Resultado esperado: O banco deve rejeitar a inserção por violação de restrição
 --                     NOT NULL na coluna status de historico_pedido.
+-- SQLSTATE esperado: 23502 (not_null_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_pedido (id_pedido, status, data_hora)
 VALUES (1, NULL, CURRENT_TIMESTAMP);
 
 -- ERRO DO BANCO:
 -- ERROR:  null value in column "status" of relation "historico_pedido" violates not-null constraint
--- DETAIL:  Failing row contains (1, null, 2026-11-15 03:07:39.683112+00).
+-- DETAIL:  Failing row contains (1, null, ...).
 
 
 -- ---------------------------------------------------------------------------------
--- Obrigatoriedade de dados (Seção 2.5): Nenhum evento de auditoria pode ser
+-- RN04 / RR11 (Seção 2): Nenhum evento de auditoria pode ser
 --        inserido sem o carimbo cronológico data_hora (NOT NULL).
 -- Resultado esperado: O banco deve rejeitar a inserção por violação de restrição
 --                     NOT NULL na coluna data_hora de historico_entrega.
+-- SQLSTATE esperado: 23502 (not_null_violation).
 -- ---------------------------------------------------------------------------------
 INSERT INTO historico_entrega (id_entrega, status, data_hora)
 VALUES (1, 'entregue', NULL);
@@ -929,6 +1136,7 @@ VALUES (1, 'entregue', NULL);
 --        (ON DELETE RESTRICT em fk_historico_entrega_entrega).
 -- Resultado esperado: O banco deve rejeitar a exclusão por violação de chave
 --                     estrangeira (fk_historico_entrega_entrega).
+-- SQLSTATE esperado: 23001 (restrict_violation).
 -- ---------------------------------------------------------------------------------
 DELETE FROM entrega
 WHERE id_entrega = 1;
