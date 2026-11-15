@@ -55,3 +55,38 @@ Ao consolidar os arquivos por subdomínio em `grupo10/sql/01_esquema.sql` e `gru
   docker compose -f docker/docker-compose.yml down -v
   docker compose -f docker/docker-compose.yml up -d
   ```
+
+
+---
+
+## 3. Decisões e Justificativas da Consolidação Final da E4 (`01_esquema.sql`, `02_carga.sql`, `03_verificacao.sql`)
+
+Após a integração dos 5 subdomínios (Identidade e Contato, Catálogo, Comércio e Finanças, Logística e Auditoria) e a auditoria frente ao `E4_e_issues.md` e ao `relatorioGrupo10.md`, foram consolidadas as seguintes decisões:
+
+### 3.1. DDL (`grupo10/sql/01_esquema.sql`)
+- **Remoção de `IF NOT EXISTS`:** removido das 5 tabelas de Comércio e Finanças (`pedido`, `item_pedido`, `avaliacao_loja`, `avaliacao_entregador`, `divisao_pagamento`) para padronizar com as demais 15 tabelas e garantir falha explícita caso o script seja executado em banco não vazio.
+- **Ações referenciais explícitas (`ON UPDATE` / `ON DELETE`):** declaradas explicitamente em todas as FKs de Comércio e Finanças (`ON UPDATE RESTRICT ON DELETE RESTRICT`), alinhando com Logística e Auditoria.
+  - *Justificativa do contraste entre subdomínios:* tabelas de composição/especialização em Identidade e Catálogo usam `ON DELETE CASCADE` (ex.: excluir `pessoa` remove `telefone`, `pessoa_endereco`, `entregador`, `cliente`, `lojista`; excluir `produto` remove `produto_categoria`) e `ON UPDATE CASCADE` no Catálogo; já tabelas transacionais e históricas (`pedido`, `item_pedido`, `avaliacao_*`, `divisao_pagamento`, `rota`, `entrega`, `historico_*`) usam `ON DELETE RESTRICT ON UPDATE RESTRICT` para impedir perda de histórico financeiro, logístico ou de auditoria.
+- **Padronização de prefixos:** unificação para `uq_*` (`uq_loja_cnpj`, `uq_produto_loja_produto`, `uq_categoria_loja_categoria`, `uq_pedido_loja`) e `ck_*` (`ck_historico_pedido_data_hora`, `ck_historico_entrega_data_hora`).
+- **Aderência estrita ao relatório:** não foram adicionados `CHECK (btrim(nome) <> '')` em `loja`/`produto`/`categoria` nem regex em `loja.telefone`, pois o `relatorioGrupo10.md` não especifica essas restrições no DDL (apenas CPF, CNPJ, CEP, UF e notas `RR15`).
+
+### 3.2. Carga (`grupo10/sql/02_carga.sql`)
+- **Reprodutibilidade (`SELECT setseed(0.42);`):** adicionada semente fixa no início do script para tornar a geração pseudoaleatória 100% determinística entre execuções, preservando distribuições realistas sem introduzir padrões periódicos artificiais nos experimentos de desempenho.
+- **CEP compartilhado em `endereco`:** substituídos os 330 CEPs distintos por 10 CEPs compartilhados (1 por bairro), evidenciando a dependência transitiva `cep -> cidade, estado` que justifica a normalização discutida no relatório.
+- **Eliminação de bloat em `pedido`:** em vez de inserir `subtotal = 0.00` e executar `UPDATE pedido` após `item_pedido` (o que duplicava a tabela para ~6.056 páginas e ~199.834 *dead rows*, distorcendo experimentos), os pedidos e itens são preparados em tabelas temporárias (`carga_comercio_pedidos` e `carga_comercio_itens` com `ON COMMIT DROP`) e inseridos já com `subtotal` e `valor_total` calculados (`3.029` páginas e `0` *dead rows*).
+- **Transação única em Comércio e Finanças:** bloco envolvido por `BEGIN;` e `COMMIT;` para evitar carga parcial em caso de erro.
+- **Coerência temporal e de domínio:**
+  - `lojas_ativas` filtra `l.status_funcionamento = 'aberta'` (aderência à regra de loja aberta / `RN01`–`RR04`).
+  - `pedido.status` sorteia todos os 7 valores de `status_pedido` (incluindo `'pago'` e `'recusado'`).
+  - `entrega.previsao_entrega` (`p.data_pedido + INTERVAL '45 minutes'`) e `rota.criada_em` / `encerrada_em` são derivados de `data_pedido` (não de `CURRENT_TIMESTAMP`), eliminando desvios de meses no histórico.
+  - `divisao_pagamento.calculada_em` (`+65 min` + offset) e `avaliacao_*.data_avaliacao` (`+2h` + offset) ocorrem sempre após o evento `'entregue'`.
+  - Rotas abertas (`encerrada_em IS NULL`) limitadas a no máximo 1 por entregador (com até 2 entregas, `RR02`), removendo o `INSERT INTO rota` avulso.
+  - Documentado em comentário que `0.85` na divisão de pagamento é parâmetro fixo de regra de negócio da plataforma (não atributo armazenado no banco).
+- **Estatísticas globais (`ANALYZE;`):** removidos os `ANALYZE VERBOSE` por subdomínio e mantido apenas um `ANALYZE;` global como última linha do script, conforme solicitado no enunciado da E4.
+
+### 3.3. Verificação (`grupo10/sql/03_verificacao.sql`)
+- **Escopo estrito da E4:** removidos os testes dependentes de gatilhos da E6 (como imutabilidade de `historico_*` — `RN08`/`RR11`, e regras de gatilho `RN02`/`RN04`/`RN12`/`RN13`), que pertencem ao `06_triggers.sql`.
+- **Cobertura completa do DDL e `SQLSTATE`:** adicionados `SQLSTATE esperado` em todos os testes e os testes faltantes (`ck_pessoa_nome`, `ck_pessoa_email`, `ck_telefone_numero`, `uq_endereco_logradouro_numero_cep`, `ck_loja_cnpj` 13 dígitos, `ck_pedido_taxa_entrega`, `ck_pedido_taxa_servico`, `fk_pedido_loja/cliente/endereco`, negativos de `divisao_pagamento`, PKs duplicadas de avaliações).
+- **Testes independentes de IDs aleatórios:** substituídos IDs fixos frágeis (`54411`, `272`, `3`) por subconsultas determinísticas (`SELECT ... LIMIT 1`), garantindo zero falsos positivos (`UPDATE 0`, `UPDATE 1`, `INSERT 0 1`).
+- **Demonstração de ações referenciais:** incluídos cenários isolados em `BEGIN; ... ROLLBACK;` de `ON DELETE CASCADE` (`pessoa` -> `telefone`/`pessoa_endereco`/papéis e `produto` -> `produto_categoria`) e teste de `ON UPDATE RESTRICT` em `pessoa_endereco -> cliente` (colunas `GENERATED ALWAYS AS IDENTITY` não aceitam `UPDATE` direto na própria PK no PostgreSQL 18).
+- **Alinhamento de comentários ao relatório:** removidas todas as referências internas (`ADR-*`, `RR16`, `RR17`, `Seção 2.3/2.4/2.5`, `Seção 1`), citando exclusivamente as regras (`RN`/`RR`) e a Seção 2 do relatório.
