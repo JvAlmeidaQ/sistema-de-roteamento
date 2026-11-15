@@ -76,7 +76,6 @@ jobs:
               -h localhost \
               -U sistemaRoteamento \
               -d roteamento_db \
-              -v ON_ERROR_STOP=1 \
               -f grupo10/sql/03_verificacao.sql
           else
             echo "03_verificacao.sql não encontrado ou está vazio."
