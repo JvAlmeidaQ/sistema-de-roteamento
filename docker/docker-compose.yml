@@ -8,11 +8,13 @@ services:
       POSTGRES_USER: sistemaRoteamento
       POSTGRES_DB: roteamento_db
     ports:
-      - "5432:5432"
+      - "5433:5432"
+      #PostgreSQL local: localhost:5432 vs PostgreSQL Docker: localhost:5433
     volumes:
       - postgres_data:/var/lib/postgresql
-      # Espelha a pasta grupo10/sql com permissão read-only (ro) para inicialização e testes manuais no container
-      - ../grupo10/sql:/docker-entrypoint-initdb.d:ro
+      # Agora apenas os arquivos 01 e 02 são executados quando o banco é criado, ou demais devem subir na mão
+      - ../grupo10/sql/01_esquema.sql:/docker-entrypoint-initdb.d/01_esquema.sql:ro
+      - ../grupo10/sql/02_carga.sql:/docker-entrypoint-initdb.d/02_carga.sql:ro
 
 volumes:
   postgres_data:
