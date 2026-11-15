@@ -521,3 +521,84 @@ ANALYZE VERBOSE avaliacao_entregador;
 -- divisao_pagamento:     369 pages |  39880 live rows |      0 dead rows | 30000 rows in sample |  39880 estimated total rows
 -- avaliacao_loja:         14 pages |   1500 live rows |      0 dead rows |  1500 rows in sample |   1500 estimated total rows
 -- avaliacao_entregador:   14 pages |   1500 live rows |      0 dead rows |  1500 rows in sample |   1500 estimated total rows
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: LOGÍSTICA
+-- Pré-requisito: cargas de Identidade e Contato (entregador) e Comércio e
+--                Finanças (pedido) executadas, antes dos gatilhos.
+-- =============================================================================
+
+BEGIN;
+
+CREATE TEMP TABLE carga_logistica_pedidos ON COMMIT DROP AS
+WITH candidatos AS (
+    SELECT p.id_pedido, p.status,
+           ROW_NUMBER() OVER (PARTITION BY p.status ORDER BY p.id_pedido) AS numero
+    FROM pedido p
+    WHERE p.status IN ('pronto', 'concluido')
+      AND NOT EXISTS (SELECT 1 FROM entrega e WHERE e.id_pedido = p.id_pedido)
+)
+SELECT id_pedido,
+       CASE WHEN status = 'concluido' THEN 'entregue'
+            WHEN numero % 3 = 1 THEN 'aguardando_entregador'
+            WHEN numero % 3 = 2 THEN 'aceita'
+            ELSE 'a_caminho' END::status_entrega AS status
+FROM candidatos
+WHERE status = 'concluido' OR numero % 5 <> 0;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM entregador)
+       OR NOT EXISTS (SELECT 1 FROM carga_logistica_pedidos) THEN
+        RAISE EXCEPTION 'Carga logística exige entregadores e pedidos prontos/concluídos sem entrega';
+    END IF;
+END;
+$$;
+
+CREATE TEMP TABLE carga_logistica_vinculos ON COMMIT DROP AS
+SELECT id_pedido, status = 'entregue' AS encerrada,
+       (ROW_NUMBER() OVER (PARTITION BY (status = 'entregue') ORDER BY id_pedido) + 1) / 2 AS numero_rota
+FROM carga_logistica_pedidos
+WHERE status <> 'aguardando_entregador';
+
+CREATE TEMP TABLE carga_logistica_rotas ON COMMIT DROP AS
+WITH entregadores AS (
+    SELECT ARRAY_AGG(id_pessoa ORDER BY id_pessoa) AS ids FROM entregador
+), grupos AS (
+    SELECT encerrada, MAX(numero_rota) AS total FROM carga_logistica_vinculos GROUP BY encerrada
+), novas AS (
+    INSERT INTO rota (id_entregador, criada_em, encerrada_em)
+    SELECT en.ids[((g.numero - 1) % cardinality(en.ids) + 1)::INT],
+           CURRENT_TIMESTAMP - CASE WHEN gr.encerrada THEN INTERVAL '1 day' ELSE INTERVAL '10 minutes' END,
+           CASE WHEN gr.encerrada THEN CURRENT_TIMESTAMP - INTERVAL '23 hours' END
+    FROM grupos gr
+    CROSS JOIN LATERAL generate_series(1, gr.total) AS g(numero)
+    CROSS JOIN entregadores en
+    ORDER BY gr.encerrada, g.numero
+    RETURNING id_rota, encerrada_em
+)
+SELECT id_rota, encerrada_em IS NOT NULL AS encerrada,
+       ROW_NUMBER() OVER (PARTITION BY (encerrada_em IS NOT NULL) ORDER BY id_rota) AS numero_rota
+FROM novas;
+
+INSERT INTO entrega (id_pedido, id_rota, status, previsao_entrega)
+SELECT p.id_pedido, r.id_rota, p.status,
+       CURRENT_TIMESTAMP + CASE
+           WHEN p.status = 'entregue' THEN INTERVAL '-23 hours'
+           WHEN p.status = 'aguardando_entregador' THEN INTERVAL '45 minutes'
+           WHEN v.numero_rota % 2 = 0 THEN INTERVAL '-10 minutes'
+           ELSE INTERVAL '30 minutes' END
+FROM carga_logistica_pedidos p
+LEFT JOIN carga_logistica_vinculos v USING (id_pedido)
+LEFT JOIN carga_logistica_rotas r USING (encerrada, numero_rota);
+
+INSERT INTO rota (id_entregador) SELECT MIN(id_pessoa) FROM entregador;
+
+ANALYZE VERBOSE rota;
+ANALYZE VERBOSE entrega;
+COMMIT;
+
+-- Resultado observado do ANALYZE VERBOSE (PostgreSQL 18):
+-- rota:    215 pages | 30654 live rows | 0 dead rows | 30000 rows in sample | 30654 estimated total rows
+-- entrega: 591 pages | 71959 live rows | 0 dead rows | 30000 rows in sample | 71959 estimated total rows

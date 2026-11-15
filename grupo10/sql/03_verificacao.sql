@@ -610,3 +610,163 @@ WHERE id_pedido = 1;
 -- ERRO DO BANCO:
 -- ERROR:  update or delete on table "pedido" violates foreign key constraint "fk_item_pedido_loja" on table "item_pedido"
 -- DETAIL:  Key (id_loja, id_pedido)=(59, 1) is still referenced from table "item_pedido".
+
+
+
+-- =================================================================================
+-- SUBDOMÍNIO: LOGÍSTICA
+-- =================================================================================
+
+-- =================================================================================
+-- 1. INSERT
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- PK de Rota: identificador único da rota não pode se repetir.
+-- Resultado esperado: rejeição pela PK pk_rota (SQLSTATE 23505).
+-- ---------------------------------------------------------------------------------
+INSERT INTO rota (id_rota, id_entregador) OVERRIDING SYSTEM VALUE
+VALUES (1, 1);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_rota"
+-- DETAIL:  Key (id_rota)=(1) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-005 / Modelo lógico: associação Pedido-Entrega 1:1 (uq_entrega_pedido).
+-- Premissa: pedido 3 já possui entrega cadastrada (id_entrega = 1).
+-- Resultado esperado: rejeição pela UNIQUE uq_entrega_pedido (SQLSTATE 23505).
+-- ---------------------------------------------------------------------------------
+INSERT INTO entrega (id_pedido, previsao_entrega)
+VALUES (3, CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uq_entrega_pedido"
+-- DETAIL:  Key (id_pedido)=(3) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- FK rota -> entregador: toda rota deve referenciar um entregador existente.
+-- Resultado esperado: rejeição pela FK fk_rota_entregador (SQLSTATE 23503).
+-- ---------------------------------------------------------------------------------
+INSERT INTO rota (id_entregador)
+VALUES (999999);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "rota" violates foreign key constraint "fk_rota_entregador"
+-- DETAIL:  Key (id_entregador)=(999999) is not present in table "entregador".
+
+
+-- =================================================================================
+-- 2. UPDATE
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- FK entrega -> pedido: toda entrega deve referenciar um pedido existente.
+-- Resultado esperado: rejeição pela FK fk_entrega_pedido (SQLSTATE 23503).
+-- ---------------------------------------------------------------------------------
+UPDATE entrega
+SET id_pedido = 999999
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "entrega" violates foreign key constraint "fk_entrega_pedido"
+-- DETAIL:  Key (id_pedido)=(999999) is not present in table "pedido".
+
+
+-- ---------------------------------------------------------------------------------
+-- FK entrega -> rota: vínculo preenchido precisa apontar para rota existente.
+-- Resultado esperado: rejeição pela FK fk_entrega_rota (SQLSTATE 23503).
+-- ---------------------------------------------------------------------------------
+UPDATE entrega
+SET id_rota = 999999
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "entrega" violates foreign key constraint "fk_entrega_rota"
+-- DETAIL:  Key (id_rota)=(999999) is not present in table "rota".
+
+
+-- ---------------------------------------------------------------------------------
+-- NOT NULL de previsao_entrega (necessária para identificar atrasos na RN03/RR05).
+-- Resultado esperado: rejeição por NOT NULL em entrega.previsao_entrega (SQLSTATE 23502).
+-- ---------------------------------------------------------------------------------
+UPDATE entrega
+SET previsao_entrega = NULL
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "previsao_entrega" of relation "entrega" violates not-null constraint
+-- DETAIL:  Failing row contains (1, 3, 10655, entregue, null).
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra complementar: encerramento não pode anteceder a criação da rota.
+-- Resultado esperado: rejeição pela CHECK ck_rota_ordem_temporal (SQLSTATE 23514).
+-- ---------------------------------------------------------------------------------
+UPDATE rota
+SET encerrada_em = criada_em - INTERVAL '1 second'
+WHERE id_rota = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "rota" violates check constraint "ck_rota_ordem_temporal"
+-- DETAIL:  Failing row contains (1, 1, 2026-11-15 02:29:03.255907+00, 2026-11-15 02:29:02.255907+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-005: entrega com status diferente de 'aguardando_entregador' exige rota preenchida.
+-- Premissa: entrega 1 está 'entregue' e vinculada a uma rota.
+-- Resultado esperado: rejeição pela CHECK ck_entrega_status_rota (SQLSTATE 23514).
+-- ---------------------------------------------------------------------------------
+UPDATE entrega
+SET id_rota = NULL
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "entrega" violates check constraint "ck_entrega_status_rota"
+-- DETAIL:  Failing row contains (1, 3, null, entregue, 2026-11-14 03:39:03.255907+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-005: entrega 'aguardando_entregador' exige id_rota NULL.
+-- Premissa: entrega 1 possui id_rota preenchido.
+-- Resultado esperado: rejeição pela CHECK ck_entrega_status_rota (SQLSTATE 23514).
+-- ---------------------------------------------------------------------------------
+UPDATE entrega
+SET status = 'aguardando_entregador'
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "entrega" violates check constraint "ck_entrega_status_rota"
+-- DETAIL:  Failing row contains (1, 3, 10655, aguardando_entregador, 2026-11-14 03:39:03.255907+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio de status_entrega (usado pelo fluxo RR06): apenas valores do ENUM.
+-- Resultado esperado: rejeição pela enumeração status_entrega (SQLSTATE 22P02).
+-- ---------------------------------------------------------------------------------
+UPDATE entrega
+SET status = 'invalido'
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  invalid input value for enum status_entrega: "invalido"
+-- LINE 2: SET status = 'invalido'
+
+
+-- =================================================================================
+-- 3. DELETE
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial (DELETE): excluir uma rota não deve apagar suas entregas
+-- (ON DELETE RESTRICT em fk_entrega_rota).
+-- Resultado esperado: rejeição pela FK fk_entrega_rota (SQLSTATE 23001).
+-- ---------------------------------------------------------------------------------
+DELETE FROM rota
+WHERE id_rota = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "rota" violates RESTRICT setting of foreign key constraint "fk_entrega_rota" on table "entrega"
+-- DETAIL:  Key (id_rota)=(1) is referenced from table "entrega".
