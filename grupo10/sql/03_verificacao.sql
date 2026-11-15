@@ -770,3 +770,169 @@ WHERE id_rota = 1;
 -- ERRO DO BANCO:
 -- ERROR:  update or delete on table "rota" violates RESTRICT setting of foreign key constraint "fk_entrega_rota" on table "entrega"
 -- DETAIL:  Key (id_rota)=(1) is referenced from table "entrega".
+
+
+
+-- =================================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- RN04 / ADR-004 (Seção 2.5): A chave primária de Historico_Pedido é composta por
+--        (id_pedido, status). Cada estado ocorre no máximo uma vez por pedido na
+--        trilha cronológica.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
+--                     pk_historico_pedido (status 'solicitado' já registrado).
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+VALUES (1, 'solicitado', CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_historico_pedido"
+-- DETAIL:  Key (id_pedido, status)=(1, solicitado) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- RN04 / ADR-004 (Seção 2.5): A chave primária de Historico_Entrega é composta por
+--        (id_entrega, status). Cada estado logístico ocorre no máximo uma vez por
+--        entrega na trilha cronológica.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave primária
+--                     pk_historico_entrega (status 'aguardando_entregador' já existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+VALUES (1, 'aguardando_entregador', CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_historico_entrega"
+-- DETAIL:  Key (id_entrega, status)=(1, aguardando_entregador) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- Esquema relacional (Seção 2.5): Historico_Pedido.id_pedido References
+--        Pedido.id_pedido. Todo registro de auditoria comercial deve pertencer a
+--        um pedido existente.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
+--                     fk_historico_pedido_pedido (pedido 999999 não existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+VALUES (999999, 'solicitado', CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "historico_pedido" violates foreign key constraint "fk_historico_pedido_pedido"
+-- DETAIL:  Key (id_pedido)=(999999) is not present in table "pedido".
+
+
+-- ---------------------------------------------------------------------------------
+-- Esquema relacional (Seção 2.5): Historico_Entrega.id_entrega References
+--        Entrega.id_entrega. Todo registro de auditoria logística deve pertencer a
+--        uma entrega existente.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a chave estrangeira
+--                     fk_historico_entrega_entrega (entrega 999999 não existe).
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+VALUES (999999, 'aguardando_entregador', CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "historico_entrega" violates foreign key constraint "fk_historico_entrega_entrega"
+-- DETAIL:  Key (id_entrega)=(999999) is not present in table "entrega".
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio temporal (Seção 2.5): O carimbo de data e hora (data_hora) de um evento
+--        de auditoria comercial não pode ser anterior ao início de operação da
+--        plataforma ('2020-01-01 00:00:00+00').
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     chk_historico_pedido_data_hora.
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+VALUES (1, 'concluido', '1999-12-31 23:59:59+00');
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "historico_pedido" violates check constraint "chk_historico_pedido_data_hora"
+-- DETAIL:  Failing row contains (1, concluido, 1999-12-31 23:59:59+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio temporal (Seção 2.5): O carimbo de data e hora (data_hora) de um evento
+--        de auditoria logística não pode ser anterior ao início de operação da
+--        plataforma ('2020-01-01 00:00:00+00').
+-- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
+--                     chk_historico_entrega_data_hora.
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+VALUES (1, 'entregue', '1999-12-31 23:59:59+00');
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "historico_entrega" violates check constraint "chk_historico_entrega_data_hora"
+-- DETAIL:  Failing row contains (1, entregue, 1999-12-31 23:59:59+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio ENUM (Seção 1): O status registrado em Historico_Pedido deve pertencer
+--        estritamente aos valores válidos do tipo ENUM status_pedido.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois 'cancelado' não faz
+--                     parte do domínio status_pedido.
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+VALUES (1, 'cancelado', CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  invalid input value for enum status_pedido: "cancelado"
+-- LINE 2: VALUES (1, 'cancelado', CURRENT_TIMESTAMP);
+
+
+-- ---------------------------------------------------------------------------------
+-- Domínio ENUM (Seção 1): O status registrado em Historico_Entrega deve pertencer
+--        estritamente aos valores válidos do tipo ENUM status_entrega.
+-- Resultado esperado: O banco deve rejeitar a inserção, pois 'extraviada' não faz
+--                     parte do domínio status_entrega.
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+VALUES (1, 'extraviada', CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  invalid input value for enum status_entrega: "extraviada"
+-- LINE 2: VALUES (1, 'extraviada', CURRENT_TIMESTAMP);
+
+
+-- ---------------------------------------------------------------------------------
+-- Obrigatoriedade de dados (Seção 2.5): Nenhum evento de auditoria pode ser
+--        inserido sem o status atingido pelo pedido (NOT NULL).
+-- Resultado esperado: O banco deve rejeitar a inserção por violação de restrição
+--                     NOT NULL na coluna status de historico_pedido.
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+VALUES (1, NULL, CURRENT_TIMESTAMP);
+
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "status" of relation "historico_pedido" violates not-null constraint
+-- DETAIL:  Failing row contains (1, null, 2026-11-15 03:07:39.683112+00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Obrigatoriedade de dados (Seção 2.5): Nenhum evento de auditoria pode ser
+--        inserido sem o carimbo cronológico data_hora (NOT NULL).
+-- Resultado esperado: O banco deve rejeitar a inserção por violação de restrição
+--                     NOT NULL na coluna data_hora de historico_entrega.
+-- ---------------------------------------------------------------------------------
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+VALUES (1, 'entregue', NULL);
+
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "data_hora" of relation "historico_entrega" violates not-null constraint
+-- DETAIL:  Failing row contains (1, entregue, null).
+
+
+-- ---------------------------------------------------------------------------------
+-- Integridade Referencial (DELETE): Uma entrega que possui eventos na trilha de
+--        auditoria não pode ser excluída, preservando o histórico logístico
+--        (ON DELETE RESTRICT em fk_historico_entrega_entrega).
+-- Resultado esperado: O banco deve rejeitar a exclusão por violação de chave
+--                     estrangeira (fk_historico_entrega_entrega).
+-- ---------------------------------------------------------------------------------
+DELETE FROM entrega
+WHERE id_entrega = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "entrega" violates RESTRICT setting of foreign key constraint "fk_historico_entrega_entrega" on table "historico_entrega"
+-- DETAIL:  Key (id_entrega)=(1) is referenced from table "historico_entrega".

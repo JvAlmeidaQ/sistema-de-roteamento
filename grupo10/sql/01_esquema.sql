@@ -333,3 +333,52 @@ CREATE TABLE entrega (
         OR (status <> 'aguardando_entregador' AND id_rota IS NOT NULL)
     )
 );
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- 1. Historico_Pedido
+--    Registra cada mudança de status do pedido em ordem cronológica.
+-- -----------------------------------------------------------------------------
+CREATE TABLE historico_pedido (
+    id_pedido BIGINT        NOT NULL,
+    status    status_pedido NOT NULL,
+    data_hora TIMESTAMPTZ   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_historico_pedido
+        PRIMARY KEY (id_pedido, status),
+
+    CONSTRAINT fk_historico_pedido_pedido
+        FOREIGN KEY (id_pedido)
+        REFERENCES pedido (id_pedido)
+        ON DELETE RESTRICT
+        ON UPDATE RESTRICT,
+
+    CONSTRAINT chk_historico_pedido_data_hora
+        CHECK (data_hora >= '2020-01-01 00:00:00+00'::timestamptz)
+);
+
+-- -----------------------------------------------------------------------------
+-- 2. Historico_Entrega
+--    Registra cada mudança de status da entrega em ordem cronológica.
+-- -----------------------------------------------------------------------------
+CREATE TABLE historico_entrega (
+    id_entrega BIGINT         NOT NULL,
+    status     status_entrega NOT NULL,
+    data_hora  TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT pk_historico_entrega
+        PRIMARY KEY (id_entrega, status),
+
+    CONSTRAINT fk_historico_entrega_entrega
+        FOREIGN KEY (id_entrega)
+        REFERENCES entrega (id_entrega)
+        ON DELETE RESTRICT
+        ON UPDATE RESTRICT,
+
+    CONSTRAINT chk_historico_entrega_data_hora
+        CHECK (data_hora >= '2020-01-01 00:00:00+00'::timestamptz)
+);

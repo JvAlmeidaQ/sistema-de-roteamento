@@ -602,3 +602,138 @@ COMMIT;
 -- Resultado observado do ANALYZE VERBOSE (PostgreSQL 18):
 -- rota:    215 pages | 30654 live rows | 0 dead rows | 30000 rows in sample | 30654 estimated total rows
 -- entrega: 591 pages | 71959 live rows | 0 dead rows | 30000 rows in sample | 71959 estimated total rows
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- Regras de reconstituição da trilha cronológica (RN04, RN12, ADR-004):
+--   - Pedidos recusados:  solicitado -> recusado (2 eventos).
+--   - Pedidos normais:    solicitado -> aceito -> pago -> em_preparacao
+--                         -> pronto -> concluido (1 a 6 eventos).
+--   - Entregas:           aguardando_entregador -> aceita -> a_caminho
+--                         -> entregue (1 a 4 eventos), iniciando quando o
+--                         pedido fica 'pronto' (data_pedido + 22 min).
+--   - Sincronização:      pedidos 'concluido' compartilham o mesmo timestamp
+--                         de 'entregue' da sua entrega; 20% das entregas
+--                         concluídas (id_entrega % 5 = 0) simulam atraso real
+--                         para alimentar relatórios de SLA.
+-- =============================================================================
+
+BEGIN;
+
+-- -----------------------------------------------------------------------------
+-- 1. Historico_Pedido (trilha cronológica do ciclo comercial)
+-- -----------------------------------------------------------------------------
+
+-- 1a. Pedidos recusados: gera apenas 'solicitado' e 'recusado'.
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+SELECT
+    p.id_pedido,
+    etapa.status,
+    p.data_pedido + etapa.deslocamento
+FROM pedido p
+CROSS JOIN (
+    VALUES
+        ('solicitado'::status_pedido, INTERVAL '0 minutes'),
+        ('recusado'::status_pedido,   INTERVAL '3 minutes')
+) AS etapa(status, deslocamento)
+WHERE p.status = 'recusado';
+
+-- 1b. Pedidos do fluxo normal: gera eventos cumulativos até o status atual.
+--     Quando o pedido está 'concluido', alinha o timestamp com o término
+--     da entrega correspondente.
+INSERT INTO historico_pedido (id_pedido, status, data_hora)
+SELECT
+    p.id_pedido,
+    etapa.status,
+    CASE
+        WHEN etapa.status = 'concluido' AND e.id_entrega IS NOT NULL THEN
+            CASE
+                WHEN e.id_entrega % 5 = 0 THEN
+                    GREATEST(p.data_pedido + INTERVAL '33 minutes', e.previsao_entrega + INTERVAL '12 minutes')
+                ELSE
+                    GREATEST(
+                        p.data_pedido + INTERVAL '33 minutes',
+                        LEAST(p.data_pedido + INTERVAL '45 minutes', e.previsao_entrega - INTERVAL '2 minutes')
+                    )
+            END
+        ELSE p.data_pedido + etapa.deslocamento
+    END
+FROM pedido p
+LEFT JOIN entrega e
+    ON e.id_pedido = p.id_pedido
+CROSS JOIN (
+    VALUES
+        (1, 'solicitado'::status_pedido,    INTERVAL '0 minutes'),
+        (2, 'aceito'::status_pedido,        INTERVAL '2 minutes'),
+        (3, 'pago'::status_pedido,          INTERVAL '5 minutes'),
+        (4, 'em_preparacao'::status_pedido, INTERVAL '8 minutes'),
+        (5, 'pronto'::status_pedido,        INTERVAL '22 minutes'),
+        (6, 'concluido'::status_pedido,     INTERVAL '45 minutes')
+) AS etapa(ordem, status, deslocamento)
+WHERE p.status <> 'recusado'
+  AND etapa.ordem <= CASE p.status
+      WHEN 'solicitado'    THEN 1
+      WHEN 'aceito'        THEN 2
+      WHEN 'pago'          THEN 3
+      WHEN 'em_preparacao' THEN 4
+      WHEN 'pronto'        THEN 5
+      WHEN 'concluido'     THEN 6
+  END;
+
+-- -----------------------------------------------------------------------------
+-- 2. Historico_Entrega (trilha cronológica do ciclo logístico)
+--    A entrega nasce no instante em que o pedido fica 'pronto' (RN12),
+--    equivalente a data_pedido + 22 minutos.
+-- -----------------------------------------------------------------------------
+
+-- 2a. Etapas até 'a_caminho' (aguardando_entregador, aceita, a_caminho).
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+SELECT
+    e.id_entrega,
+    etapa.status,
+    p.data_pedido + INTERVAL '22 minutes' + etapa.deslocamento
+FROM entrega e
+INNER JOIN pedido p
+    ON p.id_pedido = e.id_pedido
+CROSS JOIN (
+    VALUES
+        (1, 'aguardando_entregador'::status_entrega, INTERVAL '0 minutes'),
+        (2, 'aceita'::status_entrega,                INTERVAL '3 minutes'),
+        (3, 'a_caminho'::status_entrega,             INTERVAL '7 minutes')
+) AS etapa(ordem, status, deslocamento)
+WHERE etapa.ordem <= CASE e.status
+    WHEN 'aguardando_entregador' THEN 1
+    WHEN 'aceita'                THEN 2
+    WHEN 'a_caminho'             THEN 3
+    WHEN 'entregue'              THEN 3
+END;
+
+-- 2b. Etapa final ('entregue'): 20% das entregas concluídas recebem carimbo
+--     posterior à previsao_entrega (atraso) e 80% concluem dentro do prazo.
+INSERT INTO historico_entrega (id_entrega, status, data_hora)
+SELECT
+    e.id_entrega,
+    'entregue'::status_entrega,
+    CASE
+        WHEN e.id_entrega % 5 = 0 THEN
+            GREATEST(p.data_pedido + INTERVAL '33 minutes', e.previsao_entrega + INTERVAL '12 minutes')
+        ELSE
+            GREATEST(
+                p.data_pedido + INTERVAL '33 minutes',
+                LEAST(p.data_pedido + INTERVAL '45 minutes', e.previsao_entrega - INTERVAL '2 minutes')
+            )
+    END
+FROM entrega e
+INNER JOIN pedido p
+    ON p.id_pedido = e.id_pedido
+WHERE e.status = 'entregue';
+
+COMMIT;
+
+ANALYZE VERBOSE historico_pedido;
+ANALYZE VERBOSE historico_entrega;
+
+-- Resultado observado do ANALYZE VERBOSE (PostgreSQL 18):
+-- historico_pedido:  4589 pages | 720381 live rows | 0 dead rows | 30000 rows in sample | 720381 estimated total rows
+-- historico_entrega: 1422 pages | 223226 live rows | 0 dead rows | 30000 rows in sample | 223226 estimated total rows
