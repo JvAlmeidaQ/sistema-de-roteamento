@@ -168,3 +168,138 @@ ANALYZE VERBOSE cliente;
 -- entregador:      1 page  | 120 live rows |   0 dead rows | 120 rows in sample | 120 estimated total rows
 -- lojista:         1 page  | 120 live rows |   0 dead rows | 120 rows in sample | 120 estimated total rows
 -- cliente:         3 pages | 220 live rows | 215 dead rows (devido ao UPDATE de id_endereco_atual) | 220 rows in sample | 220 estimated total rows
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: CATÁLOGO
+-- Pré-requisito: carga de Identidade e Contato (lojista 81..200, endereco 1..330)
+-- Volumes: loja (120), categoria (600), produto (600), produto_categoria (720)
+-- =============================================================================
+
+BEGIN;
+
+-- -----------------------------------------------------------------------------
+-- 1. LOJA (120 registros via generate_series)
+--    1 loja para cada lojista (id_pessoa 81..200), usando endereços 1..120.
+--    A Loja 1 preserva o CNPJ '12345678000195' para o teste de UK no 03_verificacao.
+-- -----------------------------------------------------------------------------
+INSERT INTO loja (
+    id_lojista,
+    id_endereco,
+    complemento_endereco,
+    cnpj,
+    nome,
+    telefone,
+    status_funcionamento,
+    tempo_entrega_estimado,
+    taxa_entrega
+)
+SELECT
+    80 + i,
+    i,
+    CASE WHEN i % 2 = 0 THEN 'Loja ' || i END,
+    CASE
+        WHEN i = 1 THEN '12345678000195'
+        ELSE '10000000' || lpad(i::TEXT, 6, '0')
+    END,
+    (ARRAY['Mercado', 'Empório', 'Padaria', 'Quitanda', 'Bistrô', 'Armazém'])[1 + i % 6]
+        || ' ' ||
+    (ARRAY['Central', 'do Bairro', 'São Mateus', 'Real', 'Bom Pastor', 'Mineiro'])[1 + (i / 6) % 6]
+        || ' #' || i,
+    '3232' || lpad((100000 + i)::TEXT, 6, '0'),
+    (ARRAY['aberta', 'aberta', 'aberta', 'fechada']::status_funcionamento[])[1 + i % 4],
+    20 + (i % 40),
+    ROUND((4.00 + (i % 10) * 0.75)::NUMERIC, 2)
+FROM generate_series(1, 120) AS g(i);
+
+
+-- -----------------------------------------------------------------------------
+-- 2. CATEGORIA (600 registros: 120 lojas x 5 categorias via generate_series)
+-- -----------------------------------------------------------------------------
+INSERT INTO categoria (id_loja, nome)
+SELECT
+    l.id_loja,
+    (ARRAY['Bebidas', 'Padaria', 'Mercearia', 'Lanches', 'Ofertas'])[c.ordem]
+FROM loja l
+CROSS JOIN generate_series(1, 5) AS c(ordem)
+ORDER BY l.id_loja, c.ordem;
+
+
+-- -----------------------------------------------------------------------------
+-- 3. PRODUTO (600 registros: 120 lojas x 5 produtos via generate_series)
+--    Produtos de ordem 5 em lojas múltiplas de 4 ficam inativos (ativo = FALSE).
+-- -----------------------------------------------------------------------------
+INSERT INTO produto (id_loja, nome, descricao, preco, ativo)
+SELECT
+    l.id_loja,
+    (ARRAY[
+        'Água mineral 500 ml',
+        'Pão de queijo 400 g',
+        'Arroz tipo 1 5 kg',
+        'Sanduíche natural',
+        'Combo promocional'
+    ])[p.ordem] || ' - Loja ' || l.id_loja,
+    'Produto de catálogo #' || p.ordem || ' da loja ' || l.id_loja,
+    ROUND((5.50 + ((l.id_loja + p.ordem) % 25) * 1.75)::NUMERIC, 2),
+    NOT (p.ordem = 5 AND l.id_loja % 4 = 0)
+FROM loja l
+CROSS JOIN generate_series(1, 5) AS p(ordem)
+ORDER BY l.id_loja, p.ordem;
+
+
+-- -----------------------------------------------------------------------------
+-- 4. PRODUTO_CATEGORIA (720 registros)
+--    Cada um dos 600 produtos recebe sua categoria correspondente (1..5),
+--    e o 1º produto de cada uma das 120 lojas também recebe a categoria 'Ofertas'.
+-- -----------------------------------------------------------------------------
+WITH produtos_ord AS (
+    SELECT
+        id_loja,
+        id_produto,
+        ROW_NUMBER() OVER (PARTITION BY id_loja ORDER BY id_produto) AS ordem
+    FROM produto
+),
+categorias_ord AS (
+    SELECT
+        id_loja,
+        id_categoria,
+        ROW_NUMBER() OVER (PARTITION BY id_loja ORDER BY id_categoria) AS ordem
+    FROM categoria
+)
+INSERT INTO produto_categoria (id_loja, id_produto, id_categoria)
+SELECT
+    p.id_loja,
+    p.id_produto,
+    c.id_categoria
+FROM produtos_ord p
+JOIN categorias_ord c
+  ON c.id_loja = p.id_loja
+ AND c.ordem = p.ordem
+
+UNION ALL
+
+SELECT
+    p.id_loja,
+    p.id_produto,
+    c.id_categoria
+FROM produtos_ord p
+JOIN categorias_ord c
+  ON c.id_loja = p.id_loja
+ AND c.ordem = 5
+WHERE p.ordem = 1;
+
+COMMIT;
+
+-- -----------------------------------------------------------------------------
+-- 5. Estatísticas para o planejador de consultas (ANALYZE)
+-- -----------------------------------------------------------------------------
+ANALYZE VERBOSE loja;
+ANALYZE VERBOSE categoria;
+ANALYZE VERBOSE produto;
+ANALYZE VERBOSE produto_categoria;
+
+-- Resultado observado do ANALYZE VERBOSE (PostgreSQL 18):
+-- loja:              2 pages | 120 live rows | 0 dead rows | 120 rows in sample | 120 estimated total rows
+-- categoria:         4 pages | 600 live rows | 0 dead rows | 600 rows in sample | 600 estimated total rows
+-- produto:           9 pages | 600 live rows | 0 dead rows | 600 rows in sample | 600 estimated total rows
+-- produto_categoria: 5 pages | 720 live rows | 0 dead rows | 720 rows in sample | 720 estimated total rows

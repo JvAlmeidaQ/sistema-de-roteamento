@@ -93,3 +93,89 @@ CREATE TABLE lojista (
         REFERENCES pessoa (id_pessoa)
         ON UPDATE RESTRICT ON DELETE CASCADE
 );
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: CATÁLOGO
+-- =============================================================================
+
+CREATE TYPE status_funcionamento AS ENUM ('aberta', 'fechada');
+
+CREATE TABLE loja (
+    id_loja                BIGINT GENERATED ALWAYS AS IDENTITY,
+    id_lojista             BIGINT NOT NULL,
+    id_endereco            BIGINT NOT NULL,
+    complemento_endereco   VARCHAR(80),
+    cnpj                   CHAR(14) NOT NULL,
+    nome                   VARCHAR(120) NOT NULL,
+    telefone               VARCHAR(20) NOT NULL,
+    status_funcionamento   status_funcionamento NOT NULL,
+    tempo_entrega_estimado INTEGER NOT NULL,
+    taxa_entrega           NUMERIC(12,2) NOT NULL,
+
+    CONSTRAINT pk_loja PRIMARY KEY (id_loja),
+    CONSTRAINT uk_loja_cnpj UNIQUE (cnpj),
+    CONSTRAINT ck_loja_cnpj CHECK (cnpj ~ '^[0-9]{14}$'),
+    CONSTRAINT ck_loja_tempo_entrega CHECK (tempo_entrega_estimado > 0),
+    CONSTRAINT ck_loja_taxa_entrega CHECK (taxa_entrega >= 0),
+    CONSTRAINT fk_loja_lojista
+        FOREIGN KEY (id_lojista)
+        REFERENCES lojista (id_pessoa)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT,
+    CONSTRAINT fk_loja_endereco
+        FOREIGN KEY (id_endereco)
+        REFERENCES endereco (id_endereco)
+        ON UPDATE CASCADE
+        ON DELETE RESTRICT
+);
+
+CREATE TABLE produto (
+    id_produto BIGINT GENERATED ALWAYS AS IDENTITY,
+    id_loja    BIGINT NOT NULL,
+    nome       VARCHAR(120) NOT NULL,
+    descricao  TEXT,
+    preco      NUMERIC(12,2) NOT NULL,
+    ativo      BOOLEAN NOT NULL DEFAULT TRUE,
+
+    CONSTRAINT pk_produto PRIMARY KEY (id_produto),
+    CONSTRAINT uk_produto_loja_produto UNIQUE (id_loja, id_produto),
+    CONSTRAINT ck_produto_preco CHECK (preco > 0),
+    CONSTRAINT fk_produto_loja
+        FOREIGN KEY (id_loja)
+        REFERENCES loja (id_loja)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+);
+
+CREATE TABLE categoria (
+    id_categoria BIGINT GENERATED ALWAYS AS IDENTITY,
+    id_loja      BIGINT NOT NULL,
+    nome         VARCHAR(80) NOT NULL,
+
+    CONSTRAINT pk_categoria PRIMARY KEY (id_categoria),
+    CONSTRAINT uk_categoria_loja_categoria UNIQUE (id_loja, id_categoria),
+    CONSTRAINT fk_categoria_loja
+        FOREIGN KEY (id_loja)
+        REFERENCES loja (id_loja)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+);
+
+CREATE TABLE produto_categoria (
+    id_produto   BIGINT NOT NULL,
+    id_categoria BIGINT NOT NULL,
+    id_loja      BIGINT NOT NULL,
+
+    CONSTRAINT pk_produto_categoria PRIMARY KEY (id_produto, id_categoria),
+    CONSTRAINT fk_produto_categoria_produto
+        FOREIGN KEY (id_loja, id_produto)
+        REFERENCES produto (id_loja, id_produto)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE,
+    CONSTRAINT fk_produto_categoria_categoria
+        FOREIGN KEY (id_loja, id_categoria)
+        REFERENCES categoria (id_loja, id_categoria)
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+);

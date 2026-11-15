@@ -1,14 +1,3 @@
--- =================================================================================
--- SCRIPT DE VERIFICAÇÃO DE INTEGRIDADE - SUBDOMÍNIO: IDENTIDADE E CONTATO
--- Arquivo: 03_verificacao_identidade_contato.sql
--- Objetivo: Comandos de INSERT, UPDATE e DELETE que demonstram o funcionamento
---           dos controles de integridade criados no DDL
---           (01_esquema_identidade_contato.sql), a partir da carga
---           (02_carga_identidade_contato.sql).
--- =================================================================================
-
-
-
 -- ---------------------------------------------------------------------------------
 -- RN10 / RR14: O CPF deve conter apenas números e ter exatamente 11 dígitos.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
@@ -26,7 +15,7 @@ VALUES ('Teste', '0000000000A', 'teste@exemplo.com');
 -- RN10 / RR14: O CPF deve conter apenas números e ter exatamente 11 dígitos.
 -- Resultado esperado: O banco deve rejeitar a inserção, pois viola a check constraint
 --                     ck_pessoa_cpf (CPF com 10 dígitos).
--- ---------------------------------------------------------------------------------
+
 INSERT INTO pessoa (nome, cpf, email)
 VALUES ('Teste', '1234567890', 'teste@exemplo.com');
 
@@ -40,7 +29,6 @@ VALUES ('Teste', '1234567890', 'teste@exemplo.com');
 --       (UPDATE inválido).
 -- Resultado esperado: O banco deve rejeitar a alteração, pois viola a check constraint
 --                     ck_pessoa_cpf (CPF com máscara).
--- ---------------------------------------------------------------------------------
 UPDATE pessoa
 SET cpf = '000.000.001'
 WHERE id_pessoa = 1;
@@ -233,3 +221,247 @@ WHERE id_pessoa = 101 AND id_endereco = 101;
 -- ERRO DO BANCO:
 -- ERROR:  update or delete on table "pessoa_endereco" violates foreign key constraint "fk_cliente_endereco_atual" on table "cliente"
 -- DETAIL:  Key (id_pessoa, id_endereco)=(101, 101) is still referenced from table "cliente".
+
+
+
+-- =================================================================================
+-- SUBDOMÍNIO: CATÁLOGO
+-- =================================================================================
+
+-- =================================================================================
+-- 1. INSERT
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- RN10 — CNPJ deve conter exatamente 14 dígitos numéricos.
+-- Esperado: rejeição pela CHECK ck_loja_cnpj.
+-- Resultado: new row for relation "loja" violates check constraint "ck_loja_cnpj"
+-- ---------------------------------------------------------------------------------
+INSERT INTO loja (id_lojista, id_endereco, cnpj, nome, telefone,
+                  status_funcionamento, tempo_entrega_estimado, taxa_entrega)
+VALUES (1, 1, '1234567890123X', 'LOJA CNPJ INVALIDO', '(32) 3000-0001',
+        'aberta', 30, 5.00);
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "loja" violates check constraint "ck_loja_cnpj"
+-- DETAIL:  Failing row contains (121, 1, 1, null, 1234567890123X, LOJA CNPJ INVALIDO, (32) 3000-0001, aberta, 30, 5.00).
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — CNPJ deve ser único.
+-- Esperado: rejeição pela UNIQUE uk_loja_cnpj.
+-- SQLSTATE esperado: 23505 (unique_violation).
+-- O CNPJ informado precisa ser igual ao de uma loja já cadastrada.
+-- ---------------------------------------------------------------------------------
+INSERT INTO loja (id_lojista, id_endereco, cnpj, nome, telefone,
+                  status_funcionamento, tempo_entrega_estimado, taxa_entrega)
+VALUES (1, 1, '12345678000195', 'LOJA CNPJ DUPLICADO', '(32) 3000-0002',
+        'aberta', 30, 5.00);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "uk_loja_cnpj"
+-- DETAIL:  Key (cnpj)=(12345678000195) already exists.
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Loja deve referenciar um Lojista existente.
+-- Esperado: rejeição pela FK fk_loja_lojista.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO loja (id_lojista, id_endereco, cnpj, nome, telefone,
+                  status_funcionamento, tempo_entrega_estimado, taxa_entrega)
+VALUES (-999999999, 1, '98765432000199', 'LOJA SEM LOJISTA', '(32) 3000-0003',
+        'aberta', 30, 5.00);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "loja" violates foreign key constraint "fk_loja_lojista"
+-- DETAIL:  Key (id_lojista)=(-999999999) is not present in table "lojista".
+
+
+-- ---------------------------------------------------------------------------------
+-- RN09 — Preço do Produto deve ser maior que zero.
+-- Esperado: rejeição pela CHECK ck_produto_preco.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO produto (id_loja, nome, descricao, preco, ativo)
+VALUES (1, 'PRODUTO PRECO ZERO', 'Teste RN09', 0, TRUE);
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "produto" violates check constraint "ck_produto_preco"
+-- DETAIL:  Failing row contains (601, 1, PRODUTO PRECO ZERO, Teste RN09, 0.00, t).
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Produto deve pertencer a uma Loja existente.
+-- Esperado: rejeição pela FK fk_produto_loja.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO produto (id_loja, nome, descricao, preco, ativo)
+VALUES (-999999999, 'PRODUTO SEM LOJA', 'Teste de FK', 10.00, TRUE);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "produto" violates foreign key constraint "fk_produto_loja"
+-- DETAIL:  Key (id_loja)=(-999999999) is not present in table "loja".
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Nome da Categoria é obrigatório.
+-- Esperado: rejeição por NOT NULL em categoria.nome.
+-- SQLSTATE esperado: 23502 (not_null_violation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO categoria (id_loja, nome)
+VALUES (1, NULL);
+
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "nome" of relation "categoria" violates not-null constraint
+-- DETAIL:  Failing row contains (601, 1, null).
+
+
+-- ---------------------------------------------------------------------------------
+-- RF07/RN01 — status_funcionamento aceita somente 'aberta' ou 'fechada'.
+-- Esperado: rejeição pela enumeração status_funcionamento.
+-- SQLSTATE esperado: 22P02 (invalid_text_representation).
+-- ---------------------------------------------------------------------------------
+INSERT INTO loja (id_lojista, id_endereco, cnpj, nome, telefone,
+                  status_funcionamento, tempo_entrega_estimado, taxa_entrega)
+VALUES (1, 1, '98765432000270', 'LOJA STATUS INVALIDO', '(32) 3000-0004',
+        'em_manutencao'::status_funcionamento, 30, 5.00);
+
+-- ERRO DO BANCO:
+-- ERROR:  invalid input value for enum status_funcionamento: "em_manutencao"
+-- LINE 4:         'em_manutencao'::status_funcionamento, 30, 5.00);
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-001 — Produto e Categoria associados devem pertencer à mesma Loja.
+-- Esperado: rejeição pela FK composta fk_produto_categoria_categoria.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- Premissa: Produto 1 pertence à Loja 1 e Categoria 6 à Loja 2.
+-- ---------------------------------------------------------------------------------
+INSERT INTO produto_categoria (id_loja, id_produto, id_categoria)
+VALUES (1, 1, 6);
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "produto_categoria" violates foreign key constraint "fk_produto_categoria_categoria"
+-- DETAIL:  Key (id_loja, id_categoria)=(1, 6) is not present in table "categoria".
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — A associação Produto/Categoria não pode se repetir.
+-- Esperado: rejeição pela PK pk_produto_categoria.
+-- SQLSTATE esperado: 23505 (unique_violation).
+-- Premissa: a associação (Produto 1, Categoria 1) já existe.
+-- ---------------------------------------------------------------------------------
+INSERT INTO produto_categoria (id_loja, id_produto, id_categoria)
+VALUES (1, 1, 1);
+
+-- ERRO DO BANCO:
+-- ERROR:  duplicate key value violates unique constraint "pk_produto_categoria"
+-- DETAIL:  Key (id_produto, id_categoria)=(1, 1) already exists.
+
+
+-- =================================================================================
+-- 2. UPDATE
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- RN09 — Preço do Produto deve continuar maior que zero.
+-- Esperado: rejeição pela CHECK ck_produto_preco.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE produto SET preco = -1.00 WHERE id_produto = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "produto" violates check constraint "ck_produto_preco"
+-- DETAIL:  Failing row contains (1, 1, Água mineral 500 ml - Loja 1, Produto de catálogo #1 da loja 1, -1.00, t).
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Nome do Produto é obrigatório.
+-- Esperado: rejeição por NOT NULL em produto.nome.
+-- SQLSTATE esperado: 23502 (not_null_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE produto SET nome = NULL WHERE id_produto = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  null value in column "nome" of relation "produto" violates not-null constraint
+-- DETAIL:  Failing row contains (1, 1, null, Produto de catálogo #1 da loja 1, 9.00, t).
+
+
+-- ---------------------------------------------------------------------------------
+-- ADR-001 — A associação não pode apontar para loja diferente da loja
+-- à qual Produto 1 e Categoria 1 pertencem.
+-- Esperado: rejeição por uma das FKs compostas de Produto_Categoria.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE produto_categoria
+SET id_loja = 2
+WHERE id_produto = 1 AND id_categoria = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "produto_categoria" violates foreign key constraint "fk_produto_categoria_produto"
+-- DETAIL:  Key (id_loja, id_produto)=(2, 1) is not present in table "produto".
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Tempo estimado de entrega deve ser positivo.
+-- Esperado: rejeição pela CHECK ck_loja_tempo_entrega.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE loja SET tempo_entrega_estimado = 0 WHERE id_loja = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "loja" violates check constraint "ck_loja_tempo_entrega"
+-- DETAIL:  Failing row contains (1, 81, 1, null, 12345678000195, Empório Central #1, 3232100001, aberta, 0, 4.75).
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Taxa de entrega não pode ser negativa.
+-- Esperado: rejeição pela CHECK ck_loja_taxa_entrega.
+-- SQLSTATE esperado: 23514 (check_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE loja SET taxa_entrega = -0.01 WHERE id_loja = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  new row for relation "loja" violates check constraint "ck_loja_taxa_entrega"
+-- DETAIL:  Failing row contains (1, 81, 1, null, 12345678000195, Empório Central #1, 3232100001, aberta, 21, -0.01).
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Categoria deve referenciar uma Loja existente.
+-- Esperado: rejeição pela FK de Categoria para Loja.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+UPDATE categoria SET id_loja = -999999999 WHERE id_categoria = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  insert or update on table "categoria" violates foreign key constraint "fk_categoria_loja"
+-- DETAIL:  Key (id_loja)=(-999999999) is not present in table "loja".
+
+
+-- =================================================================================
+-- 3. DELETE
+-- =================================================================================
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Não excluir Lojista que possui Loja (ON DELETE RESTRICT).
+-- Esperado: rejeição pela FK fk_loja_lojista.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+DELETE FROM lojista WHERE id_pessoa = 81;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "lojista" violates RESTRICT setting of foreign key constraint "fk_loja_lojista" on table "loja"
+-- DETAIL:  Key (id_pessoa)=(81) is referenced from table "loja".
+
+
+-- ---------------------------------------------------------------------------------
+-- Regra de integridade — Não excluir Endereco utilizado por Loja (ON DELETE RESTRICT).
+-- Esperado: rejeição pela FK fk_loja_endereco.
+-- SQLSTATE esperado: 23503 (foreign_key_violation).
+-- ---------------------------------------------------------------------------------
+DELETE FROM endereco WHERE id_endereco = 1;
+
+-- ERRO DO BANCO:
+-- ERROR:  update or delete on table "endereco" violates RESTRICT setting of foreign key constraint "fk_loja_endereco" on table "loja"
+-- DETAIL:  Key (id_endereco)=(1) is referenced from table "loja".
