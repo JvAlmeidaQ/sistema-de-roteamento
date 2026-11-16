@@ -28,10 +28,7 @@ Este documento reúne o modelo de trabalho, o cronograma, os critérios de quali
 
 - **Metodologia:** desenvolvimento iterativo e incremental, guiado pelos marcos da tabela acima. Não há sprints de duração fixa.
 - **Gestão de tarefas:** todas as atividades são mapeadas como cartões no **GitHub Projects** da equipe. Hoje os cartões são Drafts e serão convertidos em Issues quando o grupo julgar adequado.
-- **Rastreabilidade de commits:** cada commit e Pull Request referencia a issue correspondente do Backlog.
-  - Padrão: `tipo(escopo): descrição [#CARD-XX]`
-  - Exemplo: `feat(ddl): implementa constraints de preco_unitario [#CARD-08]`
-  - Após a conversão dos cartões em Issues, passa-se a referenciar o número da Issue (`#N`).
+- **Rastreabilidade de commits e PRs:** os commits seguem o padrão Conventional Commits (`tipo(escopo): descrição`, ex.: `feat(ddl): implementa constraints de preco_unitario`). O vínculo rastreável com a tarefa (`#N` da Issue) deve constar obrigatoriamente no título ou na descrição do Pull Request, podendo ser incluído opcionalmente na mensagem de commit.
 
 ---
 
@@ -72,9 +69,10 @@ Uma tarefa só vai para `Concluído`, e seu Pull Request só entra em `develop`,
 
 ### 5.1. Política de Branches
 
-- `main`: contém somente versões consolidadas para entrega oficial de Engenharia de Software.
-- `main-bd`: ramo de trabalho oficial para as etapas de Banco de Dados após a entrega de Engenharia de Software.
+- `main`: contém somente versões consolidadas das entregas oficiais.
 - `develop`: ramo de integração do time.
+- `release/bd`: ramo de trabalho oficial para consolidação das etapas de Banco de Dados (DCC060).
+- `release/es`: ramo de trabalho oficial para consolidação da entrega de Engenharia de Software (DCC061).
 - `feature/<nome-da-tarefa>`: branches temporárias criadas a partir de `develop`, uma por tarefa.
 
 **Fluxo de integração:** o autor faz o merge da feature em `develop` após a aprovação do PR e a execução bem-sucedida do CI. A promoção de `develop` para `main` ocorre somente na entrega de um marco, por meio de Pull Request. A tag correspondente é criada sobre o commit de merge em `main`.
