@@ -1,14 +1,15 @@
 name: Validacao do Banco e Build
 
 on:
-  workflow_dispatch: # retirar esta linha e descomentar as de baixo quando chegar o momento
-  # pull_request:
-  #   branches: [ develop, main ]
-  # push:
-  #   branches: [ develop ]
+  workflow_dispatch:
+  pull_request:
+    branches: [ release/es, develop, main ]
+  push:
+    branches: [ release/es, develop ]
 
 jobs:
   test-database:
+    name: Validacao Banco e Backend
     runs-on: ubuntu-latest
     env:
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
@@ -65,3 +66,29 @@ jobs:
             -d roteamento_db \
             -v ON_ERROR_STOP=1 \
             -f grupo10/sql/03_verificacao.sql
+
+  build-frontend:
+    name: Build Frontend (full e bd)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: grupo10/app/frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: grupo10/app/frontend
+        run: npm ci
+
+      - name: Validar TypeScript e Build ES (full)
+        working-directory: grupo10/app/frontend
+        run: npm run build
+
+      - name: Validar TypeScript e Build BD (bd)
+        working-directory: grupo10/app/frontend
+        run: npm run build:bd
