@@ -35,7 +35,7 @@ Nosso repositório foi desenhado como um **monorepo integrado** que serve simult
 ```text
 trabalho-banco-de-dados-sql/
 ├── docker/
-│   └── docker-compose.yml          # Container PostgreSQL 18 (porta 5432)
+│   └── docker-compose.yml          # Container PostgreSQL 18 (porta 5433 no host -> 5432 no container)
 ├── docs/es/                        # Artefatos de Engenharia de Software (Requisitos, ADRs, Dicionário, Validações)
 ├── grupo10/                        # Diretório oficial empacotado para submissão (package.sh)
 │   ├── algebra/                    # Consultas em Álgebra Relacional (E3)
@@ -95,19 +95,48 @@ Toda evolução começa no banco de dados. Consulte o [Dicionário de Dados](./d
 
 ---
 
-### Passo 2 — Geração de Classes com Flyway + jOOQ
+### Passo 2 — Como aplicar o Flyway e gerar/usar as tabelas do jOOQ
 
-Com o container do PostgreSQL rodando (veja a Seção 4), gere as classes Java a partir do seu SQL (o Maven lê automaticamente a senha do arquivo `.env` da raiz via `properties-maven-plugin`):
+Com o container do PostgreSQL rodando na porta `5433` (veja a Seção 4), aplique as migrations via Flyway e gere as classes Java do jOOQ com:
 
 ```bash
 cd grupo10/app/backend
 mvn generate-sources
 ```
 
+> **Importante:** Não execute `mvn flyway:migrate` isoladamente, pois ele pula a fase `initialize` (onde o `properties-maven-plugin` lê o `.env` da raiz e o `maven-resources-plugin` copia `01_esquema.sql` e `02_carga.sql` para `target/classes/db/migration`). Sempre use `mvn generate-sources` (ou `mvn clean verify`).
+
 **O que acontece nesse comando?**
-1. O Maven copia `01_esquema.sql` e `02_carga.sql` para `target/classes/db/migration`.
-2. O `flyway-maven-plugin` aplica as migrações no banco `roteamento_db`.
-3. O `jooq-codegen-maven` lê o banco atualizado e gera as classes em `target/generated-sources/jooq` sob o pacote `br.ufjf.dcc.entregas.jooq` (ex.: `Tables.PEDIDO`, `Tables.ITEM_PEDIDO`, `PedidoRecord`).
+1. O Maven carrega `POSTGRES_PASSWORD` do `.env` da raiz (no CI, o profile `ci-env` usa `env.POSTGRES_PASSWORD` e a porta `5432`).
+2. O `maven-resources-plugin` copia `01_esquema.sql` e `02_carga.sql` para `target/classes/db/migration`.
+3. O `flyway-maven-plugin` (usando `flyway.conf` com `flyway.sqlMigrationPrefix=` para aceitar o padrão `01_`, `02_`) aplica as migrações no banco `roteamento_db` em `localhost:5433`.
+4. O `jooq-codegen-maven` lê o esquema atualizado do banco e gera as classes Java em:
+   `grupo10/app/backend/target/generated-sources/jooq/br/ufjf/dcc/entregas/jooq/`
+   *(pasta ignorada pelo Git, mas reconhecida automaticamente como source root pelo Maven e pela IDE).*
+
+**O que é gerado e como usar no código Java:**
+- `Tables.java` — constantes das tabelas (ex.: `PEDIDO`, `ITEM_PEDIDO`, `PESSOA`, `LOJA`).
+- `tables/records/*Record.java` — records tipados (ex.: `PedidoRecord`, `PessoaRecord`).
+- `enums/*` — tipos `ENUM` do PostgreSQL (ex.: `TipoTelefone`, `TipoVeiculo`).
+- `Keys.java` — chaves primárias, únicas e estrangeiras para joins/upserts.
+
+Exemplo rápido de consulta e inserção com `DSLContext`:
+```java
+import static br.ufjf.dcc.entregas.jooq.Tables.PEDIDO;
+import br.ufjf.dcc.entregas.jooq.tables.records.PedidoRecord;
+
+// Leitura tipada
+List<PedidoRecord> pedidos = dsl.selectFrom(PEDIDO)
+        .where(PEDIDO.ID_LOJA.eq(idLoja))
+        .fetch();
+
+// Escrita tipada retornando o ID gerado
+Long idPedido = dsl.insertInto(PEDIDO)
+        .set(PEDIDO.ID_LOJA, idLoja)
+        .set(PEDIDO.ID_CLIENTE, idCliente)
+        .returningResult(PEDIDO.ID_PEDIDO)
+        .fetchOneInto(Long.class);
+```
 
 ---
 
@@ -241,9 +270,10 @@ docker compose --env-file .env -f docker/docker-compose.yml up -d
 docker ps
 ```
 
-> **Dica de Reset do Banco:** Caso precise recriar o banco completamente do zero durante o desenvolvimento das migrations, derrube o container removendo o volume com:
+> **Dica de Reset do Banco:** Caso precise recriar o banco completamente do zero (ou se o Flyway acusar `Found non-empty schema(s) "public" but no schema history table` por causa de um volume antigo criado sem Flyway), derrube o container removendo o volume e suba novamente:
 > ```bash
-> docker compose -f docker/docker-compose.yml down -v
+> docker compose --env-file .env -f docker/docker-compose.yml down -v
+> docker compose --env-file .env -f docker/docker-compose.yml up -d --wait
 > ```
 
 ### 4.2 Rodando em Modo de Desenvolvimento (Hot-Reload)
