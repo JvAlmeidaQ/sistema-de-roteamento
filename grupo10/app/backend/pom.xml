@@ -19,10 +19,8 @@
 
     <properties>
         <java.version>21</java.version>
-        <db.url>jdbc:postgresql://localhost:5432/roteamento_db</db.url>
+        <db.url>jdbc:postgresql://localhost:5433/roteamento_db</db.url>
         <db.user>sistemaRoteamento</db.user>
-        <!-- Em CI usa a variavel de ambiente; localmente o properties-maven-plugin sobrescreve lendo o .env da raiz -->
-        <POSTGRES_PASSWORD>${env.POSTGRES_PASSWORD}</POSTGRES_PASSWORD>
         <!-- pasta dos scripts do edital, relativa ao pom.xml -->
         <sql.dir>${project.basedir}/../../sql</sql.dir>
         <migration.dir>${project.build.outputDirectory}/db/migration</migration.dir>
@@ -141,7 +139,9 @@
                         <location>filesystem:${migration.dir}</location>
                     </locations>
                     <!-- aceita os nomes do edital: 01_esquema.sql, 02_carga.sql -->
-                    <sqlMigrationPrefix></sqlMigrationPrefix>
+                    <configFiles>
+                        <configFile>${project.basedir}/flyway.conf</configFile>
+                    </configFiles>
                     <sqlMigrationSeparator>_</sqlMigrationSeparator>
                 </configuration>
                 <dependencies>
@@ -198,4 +198,19 @@
             </plugin>
         </plugins>
     </build>
+
+    <!-- Em CI (ou quando POSTGRES_PASSWORD ja esta no ambiente), usa a variavel de ambiente -->
+    <profiles>
+        <profile>
+            <id>ci-env</id>
+            <activation>
+                <property>
+                    <name>env.POSTGRES_PASSWORD</name>
+                </property>
+            </activation>
+            <properties>
+                <POSTGRES_PASSWORD>${env.POSTGRES_PASSWORD}</POSTGRES_PASSWORD>
+            </properties>
+        </profile>
+    </profiles>
 </project>

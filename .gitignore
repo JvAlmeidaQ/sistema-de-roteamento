@@ -9,10 +9,11 @@ grupo10/.$modelo_sistema_roteamento.drawio.bkp
 # Ambientes locais e containers
 target/
 .env
+.env.local
+.env.*.local
 docker/pgdata/
-
-# Pasta frontend - temporaria até o Marco 3
-frontend
+**/pgdata/
+grupo10/app/backend/src/main/resources/static/
 
 # Artefatos e builds
 *.zip
@@ -23,7 +24,6 @@ __pycache__/
 
 # Node modules
 node_modules/
-dist/
 
 # IDEs
 .vscode/
