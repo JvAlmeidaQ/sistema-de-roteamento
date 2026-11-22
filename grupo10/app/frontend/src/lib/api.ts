@@ -1,3 +1,7 @@
+/**
+ * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
+ * Feature Flag: VITE_APP_MODE=bd | full
+ */
 import axios from 'axios'
 
 export const api = axios.create({ baseURL: '/api' })

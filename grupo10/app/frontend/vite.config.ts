@@ -1,3 +1,7 @@
+/**
+ * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
+ * Feature Flag: VITE_APP_MODE=bd | full (RNF02)
+ */
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -5,9 +9,7 @@ import tailwindcss from '@tailwindcss/vite'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    //No Windows, o .pathname pode gerar um caminho com /C:/.... 
-    // Se o alias @ falhar, use fileURLToPath(new URL('./src', import.meta.url)), importando fileURLToPath de node:url.
-    alias: { '@': new URL('./src', import.meta.url).pathname },
+    alias: { '@': decodeURIComponent(new URL('./src', import.meta.url).pathname) },
   },
   server: {
     port: 5173,
