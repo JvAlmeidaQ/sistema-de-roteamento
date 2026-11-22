@@ -96,7 +96,7 @@
                 </executions>
             </plugin>
 
-            <!-- 1) Copia só 01 e 02 da pasta do edital para o classpath (03 não é migration) -->
+            <!-- 1) Copia scripts estruturais e de carga/visoes/gatilhos/indices da pasta do edital para o classpath -->
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
                 <executions>
@@ -112,6 +112,9 @@
                                     <includes>
                                         <include>01_esquema.sql</include>
                                         <include>02_carga.sql</include>
+                                        <include>05_visoes.sql</include>
+                                        <include>06_triggers.sql</include>
+                                        <include>07_indices.sql</include>
                                     </includes>
                                 </resource>
                             </resources>
