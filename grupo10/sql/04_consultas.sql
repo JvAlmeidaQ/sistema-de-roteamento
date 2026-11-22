@@ -1,7 +1,8 @@
 -- =============================================================================
 -- CONSULTAS SQL — ENTREGA E5 (SEÇÃO 6)
 -- Pré-requisito: 01_esquema.sql e 02_carga.sql (base consolidada da E4).
--- Ordem dos subdomínios: Identidade e Contato -> Logística (mesma de 01_esquema.sql).
+-- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
+-- (mesma sequência de 01_esquema.sql).
 -- =============================================================================
 
 -- =============================================================================
@@ -9,7 +10,7 @@
 -- =============================================================================
 
 -- Consulta 1: "Quais pessoas são, ao mesmo tempo, Cliente e Entregador e possuem pelo menos um telefone de cada tipo cadastrado no sistema?"
--- Ator: Operação / Administração da plataforma.
+-- Ator: Operação / Administração da plataforma (Consulta 2 da E3).
 -- Técnica: Divisão relacional com subconsulta correlacionada (duplo NOT EXISTS) e interseção via INNER JOIN.
 -- Tabelas: pessoa, cliente, entregador, telefone.
 SELECT p.id_pessoa,
@@ -109,11 +110,163 @@ SELECT p.id_pessoa,
 
 
 -- =============================================================================
+-- SUBDOMÍNIO: COMÉRCIO E FINANÇAS
+-- =============================================================================
+
+-- Consulta 5: "Quais lojas (nome e CNPJ) já tiveram pedidos concluídos com todas as formas de pagamento usadas na plataforma?"
+-- Ator: Administração financeira / Comercial (Consulta 8 da E3, RF05).
+-- Técnica: Divisão relacional por dupla negação (NOT EXISTS / NOT EXISTS) com subconsulta correlacionada.
+-- Tabelas: loja, pedido.
+SELECT l.id_loja,
+       l.nome,
+       l.cnpj
+  FROM loja l
+ WHERE NOT EXISTS (
+           SELECT 1
+             FROM (SELECT DISTINCT forma_pagamento
+                     FROM pedido
+                    WHERE status = 'concluido') formas
+            WHERE NOT EXISTS (
+                      SELECT 1
+                        FROM pedido p
+                       WHERE p.id_loja = l.id_loja
+                         AND p.status = 'concluido'
+                         AND p.forma_pagamento = formas.forma_pagamento
+                  )
+       )
+ ORDER BY l.id_loja;
+
+-- Consulta 6: "Quais pedidos (exibindo id_pedido e valor_total) geraram comissão ao entregador estritamente maior que a parcela repassada à loja?"
+-- Ator: Auditoria financeira / Administração (Consulta 9 da E3, RN05).
+-- Técnica: Seleção e projeção sobre a divisão de pagamento.
+-- Tabelas: divisao_pagamento.
+SELECT dp.id_pedido,
+       dp.valor_total
+  FROM divisao_pagamento dp
+ WHERE dp.comissao_entregador > dp.parcela_loja
+ ORDER BY dp.id_pedido;
+
+-- Consulta 7: "Quais pedidos tiveram valor total superior a R$ 100,00 e receberam avaliação ruim da loja (nota 1 ou 2)?"
+-- Ator: Qualidade e suporte comercial (Consulta 10 da E3, RF06/RN06).
+-- Técnica: Junção interna (INNER JOIN) com filtros de valor e nota.
+-- Tabelas: pedido, avaliacao_loja.
+SELECT p.id_pedido,
+       p.id_loja,
+       p.valor_total,
+       al.nota
+  FROM pedido p
+INNER JOIN avaliacao_loja al
+        ON al.id_pedido = p.id_pedido
+ WHERE p.valor_total > 100.00
+   AND al.nota <= 2
+ ORDER BY p.id_pedido;
+
+-- Consulta 8: "Quais pedidos já foram entregues, mas ainda não receberam a avaliação da loja, do entregador ou de ambos? Mostrar o identificador do pedido e do cliente."
+-- Ator: Engajamento / Pós-venda (Consulta 11 da E3, RF06/RN13).
+-- Técnica: Operações de conjuntos (INTERSECT e EXCEPT) combinadas com INNER JOIN em pedido.
+-- Tabelas: entrega, avaliacao_loja, avaliacao_entregador, pedido.
+SELECT p.id_pedido,
+       p.id_cliente
+  FROM (
+           SELECT e.id_pedido
+             FROM entrega e
+            WHERE e.status = 'entregue'
+           EXCEPT
+           (
+               SELECT al.id_pedido FROM avaliacao_loja al
+               INTERSECT
+               SELECT ae.id_pedido FROM avaliacao_entregador ae
+           )
+       ) pendentes
+INNER JOIN pedido p
+        ON p.id_pedido = pendentes.id_pedido
+ ORDER BY p.id_pedido;
+
+-- Consulta 9: "Qual o pedido concluído de maior valor total?"
+-- Ator: Administração financeira (Consulta 12 da E3).
+-- Técnica: Subconsulta correlacionada com NOT EXISTS (tradução direta da álgebra relacional sem agregação).
+-- Tabelas: pedido.
+SELECT p1.id_pedido,
+       p1.id_loja,
+       p1.id_cliente,
+       p1.valor_total
+  FROM pedido p1
+ WHERE p1.status = 'concluido'
+   AND NOT EXISTS (
+           SELECT 1
+             FROM pedido p2
+            WHERE p2.status = 'concluido'
+              AND p2.valor_total > p1.valor_total
+       )
+ ORDER BY p1.id_pedido;
+
+-- Consulta 10: "Quais clientes têm pelo menos um pedido concluído pago com Pix ou dinheiro e pelo menos um pago com cartão de crédito? Mostrar nome e e-mail."
+-- Ator: Comercial / Marketing (Consulta 13 da E3).
+-- Técnica: União (UNION), Interseção (INTERSECT) e junção interna com pessoa.
+-- Tabelas: pedido, pessoa.
+SELECT pe.id_pessoa,
+       pe.nome,
+       pe.email
+  FROM (
+           (
+               SELECT p.id_cliente
+                 FROM pedido p
+                WHERE p.status = 'concluido'
+                  AND p.forma_pagamento IN ('pix', 'dinheiro')
+           )
+           INTERSECT
+           (
+               SELECT p.id_cliente
+                 FROM pedido p
+                WHERE p.status = 'concluido'
+                  AND p.forma_pagamento = 'cartao_credito'
+           )
+       ) clientes_alvo
+INNER JOIN pessoa pe
+        ON pe.id_pessoa = clientes_alvo.id_cliente
+ ORDER BY pe.id_pessoa;
+
+-- Consulta 11: "Quais são os pedidos concluídos com valor total acima de R$ 250,00 e a nota da avaliação da loja, incluindo os pedidos que ainda não foram avaliados?"
+-- Ator: Qualidade / Pós-venda (RF06/RN06).
+-- Técnica: Junção externa à direita (RIGHT JOIN) preservando pedidos concluídos sem avaliação registrada.
+-- Tabelas: avaliacao_loja, pedido.
+SELECT p.id_pedido,
+       p.id_loja,
+       p.valor_total,
+       al.nota
+  FROM avaliacao_loja al
+ RIGHT JOIN pedido p
+         ON p.id_pedido = al.id_pedido
+ WHERE p.status = 'concluido'
+   AND p.valor_total > 250.00
+ ORDER BY p.valor_total DESC, p.id_pedido;
+
+-- Consulta 12: "Quais lojas acumularam repasse líquido total (soma de parcela_loja nas divisões de pagamento) superior a R$ 15.000,00 em pedidos concluídos, e qual a quantidade de pedidos e o ticket médio de cada uma?"
+-- Ator: Administração financeira / Lojista (RN05).
+-- Técnica: Junções internas + agrupamento com GROUP BY e filtro agregado com HAVING.
+-- Tabelas: loja, pedido, divisao_pagamento.
+SELECT l.id_loja,
+       l.nome,
+       COUNT(dp.id_pedido) AS qtd_pedidos,
+       SUM(dp.parcela_loja) AS repasse_total_loja,
+       ROUND(AVG(dp.valor_total), 2) AS ticket_medio
+  FROM loja l
+INNER JOIN pedido p
+        ON p.id_loja = l.id_loja
+INNER JOIN divisao_pagamento dp
+        ON dp.id_pedido = p.id_pedido
+ WHERE p.status = 'concluido'
+ GROUP BY l.id_loja, l.nome
+HAVING SUM(dp.parcela_loja) > 15000.00
+ ORDER BY repasse_total_loja DESC, l.id_loja;
+
+
+-- =============================================================================
 -- SUBDOMÍNIO: LOGÍSTICA
 -- =============================================================================
 
--- Consulta 5: "Quais rotas têm duas entregas ativas e quais são elas?"
--- Ator: Operação logística (RF04/RN02).
+-- Consulta 13: "Quais rotas têm duas entregas ativas e quais são elas?"
+-- Ator: Operação logística (Consulta 14 da E3, RF04/RN02).
 -- Técnica: Autojunção das entregas ativas da mesma rota via CTE (id_entrega_1 < id_entrega_2 elimina autopares).
 -- Tabelas: entrega, rota.
 WITH pendentes AS (
@@ -133,8 +286,8 @@ INNER JOIN rota AS r
         ON r.id_rota = e1.id_rota
  ORDER BY r.id_rota, e1.id_entrega, e2.id_entrega;
 
--- Consulta 6: "Quais entregadores estão cadastrados e quais rotas abertas têm?"
--- Ator: Operação logística (RF01/RF04).
+-- Consulta 14: "Quais entregadores estão cadastrados e quais rotas abertas têm?"
+-- Ator: Operação logística (Consulta 15 da E3, RF01/RF04).
 -- Técnica: LEFT JOIN com filtro de rota aberta no ON para preservar entregadores sem rota aberta.
 -- Tabelas: entregador, pessoa, rota.
 SELECT DISTINCT
@@ -149,7 +302,7 @@ INNER JOIN pessoa AS p
        AND r.encerrada_em IS NULL
  ORDER BY p.nome, e.tipo_veiculo, r.id_rota NULLS LAST;
 
--- Consulta 7: "Quais rotas possuem menos de duas entregas vinculadas?"
+-- Consulta 15: "Quais rotas possuem menos de duas entregas vinculadas?"
 -- Ator: Operação logística (RN02/RR02).
 -- Técnica: LEFT JOIN + GROUP BY + HAVING contando todos os vínculos de entrega da rota.
 -- Tabelas: rota, entrega.
@@ -165,7 +318,7 @@ SELECT r.id_rota,
 HAVING COUNT(e.id_entrega) < 2
  ORDER BY r.id_rota;
 
--- Consulta 8: "Quais entregadores já concluíram pelo menos duas entregas?"
+-- Consulta 16: "Quais entregadores já concluíram pelo menos duas entregas?"
 -- Ator: Gestor de Logística.
 -- Técnica: Junções internas + GROUP BY + HAVING exigindo mínimo de duas entregas concluídas.
 -- Tabelas: entregador, pessoa, rota, entrega.
@@ -184,7 +337,7 @@ INNER JOIN entrega AS e
 HAVING COUNT(e.id_entrega) >= 2
  ORDER BY entregas_concluidas DESC, en.id_pessoa;
 
--- Consulta 9: "Quais entregadores têm entregas ativas atrasadas?"
+-- Consulta 17: "Quais entregadores têm entregas ativas atrasadas?"
 -- Ator: Operação logística (apoio à RN03/RR05).
 -- Técnica: Subconsulta correlacionada com EXISTS filtrando previsões vencidas em status ativos.
 -- Tabelas: entregador, pessoa, rota, entrega.
@@ -204,7 +357,7 @@ INNER JOIN pessoa AS p
        )
  ORDER BY en.id_pessoa;
 
--- Consulta 10: "Quais entregadores possuem entregas em todos os status atribuídos existentes na base?"
+-- Consulta 18: "Quais entregadores possuem entregas em todos os status atribuídos existentes na base?"
 -- Ator: Gestor de Logística.
 -- Técnica: Divisão relacional por dupla negação (NOT EXISTS / NOT EXISTS) com USING.
 -- Tabelas: entregador, pessoa, rota, entrega.
@@ -225,7 +378,7 @@ SELECT en.id_pessoa AS id_entregador,
        )
  ORDER BY en.id_pessoa;
 
--- Consulta 11: "Quantas entregas cada entregador tem em cada status atribuído, incluindo zeros?"
+-- Consulta 19: "Quantas entregas cada entregador tem em cada status atribuído, incluindo zeros?"
 -- Ator: Gestor de Logística.
 -- Técnica: CROSS JOIN para matriz entregador x status + LEFT JOIN com COALESCE.
 -- Tabelas: entregador, rota, entrega.

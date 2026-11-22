@@ -1,7 +1,8 @@
 -- =============================================================================
 -- GATILHOS E FUNÇÕES — ENTREGA E6 (SEÇÃO 7.2)
 -- Pré-requisito: 01_esquema.sql e 02_carga.sql (base consolidada da E4).
--- Ordem dos subdomínios: Identidade e Contato -> Logística (mesma de 01_esquema.sql).
+-- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
+-- (mesma sequência de 01_esquema.sql).
 -- Padrão de erro de negócio: SQLSTATE '23514' (check_violation) com CONSTRAINT.
 -- =============================================================================
 
@@ -49,10 +50,173 @@ EXECUTE FUNCTION identidade_bloquear_alteracao_endereco();
 
 
 -- =============================================================================
+-- SUBDOMÍNIO: COMÉRCIO E FINANÇAS
+-- =============================================================================
+
+-- RR03 e RR06 (Seção 2): valida posse do endereço de entrega pelo cliente e
+-- transições válidas da máquina de estados do pedido.
+-- Por que CHECK não resolve: RR03 exige consultar a tabela pessoa_endereco
+-- para confirmar que (id_cliente, id_endereco) pertence ao cliente; RR06 exige
+-- comparar OLD.status com NEW.status durante o UPDATE.
+CREATE FUNCTION comercio_validar_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT'
+       OR NEW.id_cliente IS DISTINCT FROM OLD.id_cliente
+       OR NEW.id_endereco IS DISTINCT FROM OLD.id_endereco THEN
+        IF NOT EXISTS (
+            SELECT 1
+              FROM pessoa_endereco pe
+             WHERE pe.id_pessoa = NEW.id_cliente
+               AND pe.id_endereco = NEW.id_endereco
+        ) THEN
+            RAISE EXCEPTION USING ERRCODE = '23514',
+                CONSTRAINT = 'ck_pedido_endereco_cliente',
+                MESSAGE = format(
+                    'RR03: o endereço %s não está vinculado ao cliente %s',
+                    NEW.id_endereco, NEW.id_cliente);
+        END IF;
+    END IF;
+
+    IF TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status AND NEW.status IS NOT NULL THEN
+        IF NOT (
+            (OLD.status = 'solicitado' AND NEW.status IN ('aceito', 'recusado'))
+            OR (OLD.status = 'aceito' AND NEW.status = 'pago')
+            OR (OLD.status = 'pago' AND NEW.status = 'em_preparacao')
+            OR (OLD.status = 'em_preparacao' AND NEW.status = 'pronto')
+            OR (OLD.status = 'pronto' AND NEW.status = 'concluido')
+        ) THEN
+            RAISE EXCEPTION USING ERRCODE = '23514',
+                CONSTRAINT = 'ck_pedido_transicao_status',
+                MESSAGE = format('RR06: transição inválida de pedido: %s -> %s', OLD.status, NEW.status);
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- RN01/RR04 e RR09 (Seção 2): garante que o produto incluído no item esteja ativo
+-- e que o valor_unitario corresponda ao preço vigente no catálogo (snapshot).
+-- Por que CHECK não resolve: restrições CHECK em item_pedido não podem consultar
+-- as colunas ativo e preco na tabela produto.
+CREATE FUNCTION comercio_validar_item_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_produto RECORD;
+BEGIN
+    SELECT ativo, preco
+      INTO v_produto
+      FROM produto
+     WHERE id_loja = NEW.id_loja
+       AND id_produto = NEW.id_produto;
+
+    -- Se o produto não existir, a FK composta fk_item_produto_loja rejeita no DDL.
+    IF NOT FOUND THEN
+        RETURN NEW;
+    END IF;
+
+    IF NOT v_produto.ativo THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            CONSTRAINT = 'ck_item_pedido_produto_ativo',
+            MESSAGE = format(
+                'RN01/RR04: o produto %s da loja %s está inativo para novos pedidos',
+                NEW.id_produto, NEW.id_loja);
+    END IF;
+
+    IF NEW.valor_unitario IS DISTINCT FROM v_produto.preco THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            CONSTRAINT = 'ck_item_pedido_snapshot_preco',
+            MESSAGE = format(
+                'RR09: valor_unitario (%s) diverge do preço vigente (%s) do produto %s',
+                NEW.valor_unitario, v_produto.preco, NEW.id_produto);
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- RN13/RR08 e RN05 (Seção 2): avaliações (loja/entregador) e divisão de
+-- pagamento só podem existir após o pedido concluído e a entrega em 'entregue';
+-- na divisão de pagamento, confere também coerência com valor_total e taxa_entrega.
+-- Por que CHECK não resolve: exige consultar status nas tabelas pedido e entrega
+-- e comparar os valores monetários armazenados em pedido.
+CREATE FUNCTION comercio_validar_pos_entrega()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_pedido RECORD;
+BEGIN
+    SELECT p.status, p.valor_total, p.taxa_entrega
+      INTO v_pedido
+      FROM pedido p
+     WHERE p.id_pedido = NEW.id_pedido;
+
+    -- Se o pedido não existir, a FK da respectiva tabela rejeita no DDL.
+    IF NOT FOUND THEN
+        RETURN NEW;
+    END IF;
+
+    IF v_pedido.status <> 'concluido'
+       OR NOT EXISTS (
+           SELECT 1
+             FROM entrega e
+            WHERE e.id_pedido = NEW.id_pedido
+              AND e.status = 'entregue'
+       ) THEN
+        RAISE EXCEPTION USING ERRCODE = '23514',
+            CONSTRAINT = 'ck_pos_entrega_pedido_concluido',
+            MESSAGE = format(
+                'RN13/RR08: o pedido %s precisa estar concluído com entrega realizada antes do registro pós-entrega',
+                NEW.id_pedido);
+    END IF;
+
+    IF TG_TABLE_NAME = 'divisao_pagamento' THEN
+        IF NEW.valor_total IS DISTINCT FROM v_pedido.valor_total
+           OR NEW.comissao_entregador IS DISTINCT FROM v_pedido.taxa_entrega THEN
+            RAISE EXCEPTION USING ERRCODE = '23514',
+                CONSTRAINT = 'ck_divisao_pagamento_valores_pedido',
+                MESSAGE = format(
+                    'RN05: divisão de pagamento do pedido %s diverge de valor_total ou taxa_entrega do pedido',
+                    NEW.id_pedido);
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_pedido_10_validar
+BEFORE INSERT OR UPDATE OF id_cliente, id_endereco, status ON pedido
+FOR EACH ROW EXECUTE FUNCTION comercio_validar_pedido();
+
+CREATE TRIGGER trg_item_pedido_10_validar
+BEFORE INSERT OR UPDATE OF id_loja, id_produto, valor_unitario ON item_pedido
+FOR EACH ROW EXECUTE FUNCTION comercio_validar_item_pedido();
+
+CREATE TRIGGER trg_divisao_pagamento_10_validar
+BEFORE INSERT OR UPDATE OF id_pedido, valor_total, comissao_entregador ON divisao_pagamento
+FOR EACH ROW EXECUTE FUNCTION comercio_validar_pos_entrega();
+
+CREATE TRIGGER trg_avaliacao_loja_10_validar
+BEFORE INSERT OR UPDATE OF id_pedido ON avaliacao_loja
+FOR EACH ROW EXECUTE FUNCTION comercio_validar_pos_entrega();
+
+CREATE TRIGGER trg_avaliacao_entregador_10_validar
+BEFORE INSERT OR UPDATE OF id_pedido ON avaliacao_entregador
+FOR EACH ROW EXECUTE FUNCTION comercio_validar_pos_entrega();
+
+
+-- =============================================================================
 -- SUBDOMÍNIO: LOGÍSTICA
 -- =============================================================================
 
--- RN12/RR07, RR06 e ADR-004/005: valida origem, estado inicial, imutabilidade
+-- RN12/RR07 e RR06 (Seção 2): valida origem, estado inicial, imutabilidade
 -- de id_pedido e transições válidas de status da entrega.
 -- Por que CHECK não resolve: RN12 consulta o status na tabela pedido e RR06
 -- exige comparar o estado anterior (OLD.status) com o novo (NEW.status).
@@ -120,7 +284,7 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    -- Serializa atribuições concorrentes à mesma rota (ADR-005).
+    -- Serializa atribuições concorrentes à mesma rota.
     PERFORM 1 FROM rota WHERE id_rota = NEW.id_rota FOR UPDATE;
     IF NOT FOUND THEN
         RETURN NEW;
@@ -141,7 +305,7 @@ BEGIN
 END;
 $$;
 
--- RN12/RR07 e ADR-004/005: pedido pronto gera automaticamente a entrega inicial.
+-- RN12/RR07 (Seção 2): pedido pronto gera automaticamente a entrega inicial.
 -- Por que CHECK não resolve: restrições declarativas não inserem linhas em
 -- outra tabela nem consultam tempo_entrega_estimado na tabela loja.
 CREATE FUNCTION logistica_gerar_entrega()
@@ -172,7 +336,8 @@ BEGIN
 END;
 $$;
 
--- Sincronização ADR-004: finalizar a entrega conclui o pedido na mesma transação.
+-- Sincronização de estados entre Entrega e Pedido: finalizar a entrega conclui
+-- o pedido na mesma transação.
 -- Por que CHECK não resolve: exige atualização em outra tabela (pedido).
 CREATE FUNCTION logistica_concluir_pedido()
 RETURNS TRIGGER

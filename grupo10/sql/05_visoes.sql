@@ -1,7 +1,8 @@
 -- =============================================================================
 -- VISÕES — ENTREGA E5 (SEÇÃO 7.1)
 -- Pré-requisito: 01_esquema.sql e 02_carga.sql (base consolidada da E4).
--- Ordem dos subdomínios: Identidade e Contato -> Logística (mesma de 01_esquema.sql).
+-- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
+-- (mesma sequência de 01_esquema.sql).
 -- =============================================================================
 
 BEGIN;
@@ -49,10 +50,37 @@ SELECT p.id_pessoa,
 
 
 -- =============================================================================
+-- SUBDOMÍNIO: COMÉRCIO E FINANÇAS
+-- =============================================================================
+
+-- Visão 3: "Lojista e administração financeira da plataforma (painel de faturamento, repasses e reputação por loja)"
+-- Objetivo: Consolida por loja a quantidade de pedidos concluídos, o faturamento bruto (valor_total), o total líquido repassado à loja (parcela_loja), o total de comissões de entrega (comissao_entregador), a receita retida pela plataforma (taxa_plataforma) e a média de avaliações recebidas pela loja (RF05, RF06, RN05, RN06), evitando que o consumidor reescreva múltiplas junções e agregações.
+-- Atualizável? Justifique: Não. A definição combina quatro tabelas no FROM (loja, pedido, divisao_pagamento e avaliacao_loja), utiliza GROUP BY e funções de agregação (COUNT, SUM, AVG, COALESCE). No PostgreSQL, is_updatable = NO; inserções e alterações devem ser feitas nas tabelas-base.
+CREATE OR REPLACE VIEW vw_resumo_financeiro_loja AS
+SELECT l.id_loja,
+       l.nome AS nome_loja,
+       COUNT(dp.id_pedido) AS pedidos_concluidos,
+       COALESCE(SUM(dp.valor_total), 0.00) AS faturamento_bruto,
+       COALESCE(SUM(dp.parcela_loja), 0.00) AS repasse_total_loja,
+       COALESCE(SUM(dp.comissao_entregador), 0.00) AS total_comissao_entregadores,
+       COALESCE(SUM(dp.taxa_plataforma), 0.00) AS receita_plataforma,
+       ROUND(AVG(al.nota), 2) AS media_avaliacao_loja
+  FROM loja l
+  LEFT JOIN pedido p
+         ON p.id_loja = l.id_loja
+        AND p.status = 'concluido'
+  LEFT JOIN divisao_pagamento dp
+         ON dp.id_pedido = p.id_pedido
+  LEFT JOIN avaliacao_loja al
+         ON al.id_pedido = p.id_pedido
+ GROUP BY l.id_loja, l.nome;
+
+
+-- =============================================================================
 -- SUBDOMÍNIO: LOGÍSTICA
 -- =============================================================================
 
--- Visão 3: "Operação / gestor de Logística (painel de acompanhamento de rotas)"
+-- Visão 4: "Operação / gestor de Logística (painel de acompanhamento de rotas)"
 -- Objetivo: Centralizar o painel operacional das rotas com dados do entregador, total de entregas vinculadas, entregas ativas, entregas atrasadas e vagas disponíveis segundo a RN02/RR02 (máximo de duas entregas por rota, inclusive concluídas).
 -- Atualizável? Justifique: Não. A definição combina múltiplas tabelas no FROM (rota, entregador, pessoa, entrega), utiliza GROUP BY e funções de agregação (COUNT e COUNT FILTER) além de coluna calculada (CASE para vagas). No PostgreSQL, is_updatable = NO; escritas devem ser realizadas diretamente nas tabelas-base.
 CREATE OR REPLACE VIEW vw_painel_rotas_logistica AS
