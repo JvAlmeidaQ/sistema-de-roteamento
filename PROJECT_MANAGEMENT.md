@@ -124,3 +124,25 @@ Os assets da Release devem representar exatamente o estado do projeto correspond
 - **Comunicação:** o canal oficial da equipe é o grupo do WhatsApp.
 - **Revisão de PR:** prazo máximo de **2 dias** para o primeiro retorno do revisor. Se o prazo estourar, o autor avisa no grupo e outro integrante assume a revisão.
 - **Autonomia:** cada integrante pode pegar tarefas que estejam em `A Fazer`, desde que registre o responsável no cartão antes de começar.
+
+---
+
+## 7. Riscos e Impedimentos da Reta Final
+
+| Risco / Impedimento | Impacto | Responsável | Ação Imediata |
+| :--- | :--- | :--- | :--- |
+| **Implementação das features a partir do scaffold atual** | Atraso na integração ponta a ponta (Backend + Frontend) para os Marcos 1 e 2 | Responsáveis de cada subdomínio (`#15` a `#19`) | Priorizar os fluxos críticos (`Controller` → `Service` → `Repository` → tela) em PRs pequenos contra `release/es` |
+| **Ausência de suíte de testes em `grupo10/app/backend/src/test/`** | Regressões não detectadas na API e nas regras de negócio da camada de aplicação | Autores das features + revisor do PR | Criar ao menos testes de fumaça/integração (JUnit + `@SpringBootTest`/MockMvc) junto com cada feature para rodar no `mvn verify` |
+| **Alinhamento entre `release/bd` e `release/es`** | Divergência de scripts SQL (`01`–`03`) ou quebra no empacotamento final | Responsável de integração / SCM | Sincronizar `release/bd` e `release/es` antes do congelamento (24/11), validando `./package.sh` e `ci.yml` |
+| **Pendências de *issues* abertas** | Perda de rastreabilidade e itens de entregas anteriores ainda abertos (`#12`, `#13`, épicos) | Toda a equipe | Revisar o backlog no GitHub, vincular PRs com `Closes #N` e fechar *issues* já concluídas |
+| **Ausência de *branch protection* automática** | Risco de *push* direto ou *merge* sem revisão/CI verde em `main`, `develop` e `release/es` | Admin do repositório (`JvAlmeidaQ`) | Manter disciplina estrita de PRs com checklist do DoD e, se possível, ativar proteção básica exigindo `ci.yml` |
+| **Gestão do tempo de apresentação (15 a 20 min)** | Extrapolação do limite ou corte de tópicos teóricos/demonstração | Toda a equipe | Ensaiar a apresentação cronometrada dividindo claramente os blocos (teoria, arquitetura/SCM e demo ao vivo) |
+
+---
+
+## 8. Checklist de Encerramento / DoD Final (DCC061)
+
+- [ ] **Documento-texto (DOCX/PDF):** redação consolidada dos 3 temas teóricos e impactos de IA revisada e exportada.
+- [ ] **Código e repositório alinhados:** funcionalidades integradas em `release/es`, *issues* correspondentes fechadas, `matriz_rastreabilidade.md` atualizada e pipeline `.github/workflows/ci.yml` verde.
+- [ ] ***Slides* em PDF:** deck enxuto alinhado ao documento-texto e à demonstração prática do sistema.
+- [ ] **Apresentação (15 a 20 min):** roteiro definido por integrante e ensaio cronometrado concluído antes da submissão final (24/11).
