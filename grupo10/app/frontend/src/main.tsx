@@ -1,16 +1,19 @@
+/**
+ * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
+ */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
+import { SessaoUsuarioProvider } from './context/SessaoUsuarioContext'
+import { AppRoutes } from './routes/AppRoutes'
 import './index.css'
-
-function App() {
-  return <h1 className="p-6 text-2xl font-bold">Modo: {import.meta.env.VITE_APP_MODE}</h1>
-}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <SessaoUsuarioProvider>
+        <AppRoutes />
+      </SessaoUsuarioProvider>
     </BrowserRouter>
   </StrictMode>,
 )
