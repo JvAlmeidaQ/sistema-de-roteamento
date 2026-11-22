@@ -46,14 +46,14 @@ jobs:
 
       - name: Verificar existência dos scripts
         run: |
-          for f in 01_esquema 02_carga 03_verificacao; do
+          for f in 01_esquema 02_carga 03_verificacao 04_consultas 05_visoes 06_triggers 07_indices verificacao_dos_gatilhos; do
             if [ ! -s "grupo10/sql/$f.sql" ]; then
               echo "$f.sql não encontrado ou está vazio."
               exit 1
             fi
           done
 
-      # Flyway aplica 01_esquema.sql e 02_carga.sql; jOOQ gera as classes; Spring compila e testa
+      # Flyway aplica 01, 02, 05, 06 e 07; jOOQ gera as classes; Spring compila e testa
       - name: Build (Flyway + jOOQ + testes)
         working-directory: grupo10/app/backend
         run: mvn -B verify -Ddb.url=jdbc:postgresql://localhost:5432/roteamento_db
@@ -65,6 +65,25 @@ jobs:
             -U sistemaRoteamento \
             -d roteamento_db \
             -f grupo10/sql/03_verificacao.sql
+
+      - name: Testar verificacao_dos_gatilhos.sql
+        run: |
+          psql \
+            -h localhost \
+            -U sistemaRoteamento \
+            -d roteamento_db \
+            -v ON_ERROR_STOP=1 \
+            -f grupo10/sql/verificacao_dos_gatilhos.sql
+
+      - name: Testar 04_consultas.sql
+        run: |
+          psql \
+            -h localhost \
+            -U sistemaRoteamento \
+            -d roteamento_db \
+            -v ON_ERROR_STOP=1 \
+            -o /dev/null \
+            -f grupo10/sql/04_consultas.sql
 
   build-frontend:
     name: Build Frontend (full e bd)
