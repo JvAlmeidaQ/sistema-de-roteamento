@@ -1,7 +1,7 @@
 -- =============================================================================
 -- ÍNDICES SECUNDÁRIOS — ENTREGA E6 (SEÇÃO 8.1)
 -- Pré-requisito: 01_esquema.sql e 02_carga.sql (base consolidada da E4).
--- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
+-- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística -> Auditoria
 -- (mesma sequência de 01_esquema.sql).
 -- Observação: PKs e UNIQUEs já possuem índices no DDL e não são duplicados.
 -- =============================================================================
@@ -81,5 +81,35 @@ CREATE INDEX idx_rota_entregador
 CREATE INDEX idx_entrega_ativa_previsao_pedido
     ON entrega USING btree (previsao_entrega, id_pedido)
     WHERE status IN ('aceita', 'a_caminho');
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- =============================================================================
+
+-- Tabela: historico_pedido | Colunas: (status, data_hora) | Tipo: B-tree composto
+-- Benefício: Como a PK composta (id_pedido, status) começa por id_pedido, este
+-- índice acelera buscas e ordenações temporais filtradas por status (ex.:
+-- pedidos 'aceito' ordenados por aceito_em na Consulta 20 e filtros por janela
+-- temporal de status = 'concluido' cruzando com pedido em experimentos_auditoria.md),
+-- eliminando Seq Scan e Sort em volume > 200.000 linhas (RNF04).
+CREATE INDEX idx_historico_pedido_status_data_hora
+    ON historico_pedido USING btree (status, data_hora);
+
+-- Tabela: historico_entrega | Colunas: (status, data_hora) | Tipo: B-tree composto
+-- Benefício: Acelera consultas e relatórios de pontualidade/SLA que filtram
+-- eventos logísticos concluídos (status = 'entregue') e comparam ou filtram
+-- intervalos em data_hora cruzando com entrega.previsao_entrega e pedido
+-- (apoia a Consulta 21, a Consulta 22 e a Visão 6 — vw_auditoria_sla_entregas).
+CREATE INDEX idx_historico_entrega_status_data_hora
+    ON historico_entrega USING btree (status, data_hora);
+
+-- Tabela: pedido | Coluna: data_pedido | Tipo: B-tree
+-- Benefício: Acelera filtros e cruzamentos por janela temporal de criação do
+-- pedido (pedido.data_pedido) quando correlacionados com os marcos auditados
+-- em historico_pedido e historico_entrega para relatórios de tempo de ciclo
+-- operacional e SLA (RF10 / RNF04).
+CREATE INDEX idx_pedido_data_pedido
+    ON pedido USING btree (data_pedido);
 
 COMMIT;

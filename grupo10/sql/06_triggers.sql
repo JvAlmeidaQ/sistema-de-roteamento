@@ -1,7 +1,7 @@
 -- =============================================================================
 -- GATILHOS E FUNÇÕES — ENTREGA E6 (SEÇÃO 7.2)
 -- Pré-requisito: 01_esquema.sql e 02_carga.sql (base consolidada da E4).
--- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
+-- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística -> Auditoria
 -- (mesma sequência de 01_esquema.sql).
 -- Padrão de erro de negócio: SQLSTATE '23514' (check_violation) com CONSTRAINT.
 -- =============================================================================
@@ -383,6 +383,127 @@ BEGIN
         GROUP BY id_rota HAVING COUNT(*) > 2
     ) THEN
         RAISE EXCEPTION 'RN02: existem rotas com mais de duas entregas antes da instalação';
+    END IF;
+END;
+$$;
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- =============================================================================
+
+-- RN08/RR11 (Seção 2): bloqueio absoluto de UPDATE, DELETE e TRUNCATE nas
+-- tabelas de trilha cronológica (historico_pedido e historico_entrega),
+-- garantindo que o histórico de auditoria seja estritamente append-only (ADR-004).
+-- Por que CHECK não resolve: restrições declarativas (CHECK, UNIQUE, FK) não
+-- interceptam operações de remoção (DELETE/TRUNCATE) nem bloqueiam mutações
+-- arbitrárias em registros históricos já persistidos. Apenas gatilhos BEFORE
+-- (em nível de linha e de instrução) impedem qualquer alteração retroativa.
+CREATE FUNCTION auditoria_bloquear_mutacao_historico()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RAISE EXCEPTION USING ERRCODE = '23514',
+        CONSTRAINT = format('ck_%s_imutavel', TG_TABLE_NAME),
+        MESSAGE = format(
+            'RN08/RR11: registros da tabela %s são estritamente imutáveis (operação %s bloqueada)',
+            TG_TABLE_NAME, TG_OP),
+        HINT = 'A trilha de auditoria é append-only; registre apenas novas transições de estado.';
+END;
+$$;
+
+-- RN04 (Seção 2): gravação automática de evento cronológico em historico_pedido
+-- a cada criação ou mudança de status do pedido (ADR-004).
+-- Por que CHECK não resolve: restrições CHECK apenas validam colunas da própria
+-- linha e não inserem registros derivados na tabela historico_pedido.
+CREATE FUNCTION auditoria_registrar_historico_pedido()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT'
+       OR (TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status) THEN
+        INSERT INTO historico_pedido (id_pedido, status, data_hora)
+        VALUES (NEW.id_pedido, NEW.status, CURRENT_TIMESTAMP)
+        ON CONFLICT (id_pedido, status) DO NOTHING;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- RN04 (Seção 2): gravação automática de evento cronológico em historico_entrega
+-- a cada criação ou mudança de status da entrega (ADR-004).
+-- Por que CHECK não resolve: restrições CHECK não propagam eventos de transição
+-- de estado para a tabela historico_entrega.
+CREATE FUNCTION auditoria_registrar_historico_entrega()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT'
+       OR (TG_OP = 'UPDATE' AND NEW.status IS DISTINCT FROM OLD.status) THEN
+        INSERT INTO historico_entrega (id_entrega, status, data_hora)
+        VALUES (NEW.id_entrega, NEW.status, CURRENT_TIMESTAMP)
+        ON CONFLICT (id_entrega, status) DO NOTHING;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_historico_pedido_10_imutavel
+BEFORE UPDATE OR DELETE ON historico_pedido
+FOR EACH ROW EXECUTE FUNCTION auditoria_bloquear_mutacao_historico();
+
+CREATE TRIGGER trg_historico_pedido_20_imutavel_stmt
+BEFORE UPDATE OR DELETE OR TRUNCATE ON historico_pedido
+FOR EACH STATEMENT EXECUTE FUNCTION auditoria_bloquear_mutacao_historico();
+
+CREATE TRIGGER trg_historico_entrega_10_imutavel
+BEFORE UPDATE OR DELETE ON historico_entrega
+FOR EACH ROW EXECUTE FUNCTION auditoria_bloquear_mutacao_historico();
+
+CREATE TRIGGER trg_historico_entrega_20_imutavel_stmt
+BEFORE UPDATE OR DELETE OR TRUNCATE ON historico_entrega
+FOR EACH STATEMENT EXECUTE FUNCTION auditoria_bloquear_mutacao_historico();
+
+CREATE TRIGGER trg_pedido_20_auditoria_registrar_historico
+AFTER INSERT OR UPDATE OF status ON pedido
+FOR EACH ROW EXECUTE FUNCTION auditoria_registrar_historico_pedido();
+
+CREATE TRIGGER trg_entrega_25_auditoria_registrar_historico
+AFTER INSERT OR UPDATE OF status ON entrega
+FOR EACH ROW EXECUTE FUNCTION auditoria_registrar_historico_entrega();
+
+-- Verificação preventiva da RN04 na instalação dos gatilhos.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+          FROM pedido p
+         WHERE NOT EXISTS (
+                   SELECT 1
+                     FROM historico_pedido hp
+                    WHERE hp.id_pedido = p.id_pedido
+                      AND hp.status = p.status
+               )
+    ) THEN
+        RAISE EXCEPTION 'RN04: existem pedidos sem registro do status atual em historico_pedido antes da instalação';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+          FROM entrega e
+         WHERE NOT EXISTS (
+                   SELECT 1
+                     FROM historico_entrega he
+                    WHERE he.id_entrega = e.id_entrega
+                      AND he.status = e.status
+               )
+    ) THEN
+        RAISE EXCEPTION 'RN04: existem entregas sem registro do status atual em historico_entrega antes da instalação';
     END IF;
 END;
 $$;
