@@ -17,3 +17,10 @@ spring:
     sql-migration-separator: "_"
   jooq:
     sql-dialect: postgres
+
+app:
+  financeiro:
+    # Valor fixo cobrado pela plataforma por pedido (gravado em pedido.taxa_servico - RR09/RR10)
+    taxa-servico-fixa: 2.50
+    # Percentual retido pela plataforma sobre o subtotal da loja no split (15% -> loja recebe 85% - RF09/RN05)
+    percentual-retencao-subtotal: 0.15
