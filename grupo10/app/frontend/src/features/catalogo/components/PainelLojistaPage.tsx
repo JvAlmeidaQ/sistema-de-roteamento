@@ -537,14 +537,18 @@ export function PainelLojistaPage() {
                   Tempo Estimado (min) * — <span className="text-[11px] text-text-default">RR13: &gt; 0</span>
                 </label>
                 <input
-                  id="loja-tempo"
-                  type="number"
-                  min="1"
-                  {...registerLoja('tempoEntregaEstimado')}
-                  className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
+                    id="loja-tempo"
+                    type="number"
+                    min="1"
+                    {...registerLoja('tempoEntregaEstimado', {
+                      valueAsNumber: true,
+                    })}
+                    className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
                 />
                 {errorsLoja.tempoEntregaEstimado && (
-                  <p className="mt-1 text-xs text-state-error">{errorsLoja.tempoEntregaEstimado.message}</p>
+                    <p className="mt-1 text-xs text-state-error">
+                      {errorsLoja.tempoEntregaEstimado.message}
+                    </p>
                 )}
               </div>
 
@@ -553,15 +557,19 @@ export function PainelLojistaPage() {
                   Taxa de Entrega (R$) * — <span className="text-[11px] text-text-default">RR13: &gt;= 0</span>
                 </label>
                 <input
-                  id="loja-taxa"
-                  type="number"
-                  step="0.01"
-                  min="0.00"
-                  {...registerLoja('taxaEntrega')}
-                  className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
+                    id="loja-taxa"
+                    type="number"
+                    step="0.01"
+                    min="0.00"
+                    {...registerLoja('taxaEntrega', {
+                      valueAsNumber: true,
+                    })}
+                    className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
                 />
                 {errorsLoja.taxaEntrega && (
-                  <p className="mt-1 text-xs text-state-error">{errorsLoja.taxaEntrega.message}</p>
+                    <p className="mt-1 text-xs text-state-error">
+                      {errorsLoja.taxaEntrega.message}
+                    </p>
                 )}
               </div>
             </div>
