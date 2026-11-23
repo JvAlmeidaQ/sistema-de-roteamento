@@ -396,3 +396,94 @@ SELECT en.id_pessoa AS id_entregador,
     ON t.id_entregador = en.id_pessoa
    AND t.status = estados.status
  ORDER BY en.id_pessoa, estados.status;
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- =============================================================================
+
+-- Consulta 20: "Quais pedidos foram aceitos pela loja, mas ainda não têm registro de pagamento? Mostrar pedido, loja e cliente."
+-- Ator: Operação / Administração financeira (Consulta 16 da E3, RF05/RN04).
+-- Técnica: Junção interna (INNER JOIN) + subconsulta correlacionada com NOT EXISTS (tradução da diferença relacional).
+-- Tabelas: historico_pedido, pedido.
+SELECT p.id_pedido,
+       p.id_loja,
+       p.id_cliente,
+       hp_aceito.data_hora AS aceito_em
+  FROM historico_pedido hp_aceito
+INNER JOIN pedido p
+        ON p.id_pedido = hp_aceito.id_pedido
+ WHERE hp_aceito.status = 'aceito'
+   AND NOT EXISTS (
+           SELECT 1
+             FROM historico_pedido hp_pago
+            WHERE hp_pago.id_pedido = hp_aceito.id_pedido
+              AND hp_pago.status = 'pago'
+       )
+ ORDER BY hp_aceito.data_hora DESC, p.id_pedido;
+
+-- Consulta 21: "Quais entregas foram concluídas depois da previsão de entrega? Mostrar entrega, pedido, previsão e data real de entrega."
+-- Ator: Operação logística / Auditoria de SLA (Consulta 17 da E3, RF06/RN04).
+-- Técnica: Junção interna com condição theta temporal (INNER JOIN ... ON he.data_hora > e.previsao_entrega).
+-- Tabelas: historico_entrega, entrega.
+SELECT e.id_entrega,
+       e.id_pedido,
+       e.previsao_entrega,
+       he.data_hora AS data_entrega,
+       ROUND(EXTRACT(EPOCH FROM (he.data_hora - e.previsao_entrega)) / 60.0, 2) AS atraso_minutos
+  FROM historico_entrega he
+INNER JOIN entrega e
+        ON e.id_entrega = he.id_entrega
+       AND he.data_hora > e.previsao_entrega
+ WHERE he.status = 'entregue'
+ ORDER BY atraso_minutos DESC, e.id_entrega;
+
+-- Consulta 22: "Quais lojas acumularam pelo menos 5 entregas concluídas em atraso, exibindo o identificador e o nome da loja, o total de entregas atrasadas e o atraso médio em minutos?"
+-- Ator: Administração / Auditoria de SLA (RF10/RN04).
+-- Técnica: Múltiplas junções internas (INNER JOIN) + agrupamento com GROUP BY e filtro agregado com HAVING.
+-- Tabelas: historico_entrega, entrega, pedido, loja.
+SELECT l.id_loja,
+       l.nome,
+       COUNT(e.id_entrega) AS total_entregas_atrasadas,
+       ROUND(AVG(EXTRACT(EPOCH FROM (he.data_hora - e.previsao_entrega)) / 60.0), 2) AS media_atraso_minutos
+  FROM historico_entrega he
+INNER JOIN entrega e
+        ON e.id_entrega = he.id_entrega
+INNER JOIN pedido p
+        ON p.id_pedido = e.id_pedido
+INNER JOIN loja l
+        ON l.id_loja = p.id_loja
+ WHERE he.status = 'entregue'
+   AND he.data_hora > e.previsao_entrega
+ GROUP BY l.id_loja, l.nome
+HAVING COUNT(e.id_entrega) >= 5
+ ORDER BY total_entregas_atrasadas DESC, media_atraso_minutos DESC, l.id_loja;
+
+-- Consulta 23: "Quais pedidos concluídos tiveram tempo total entre 'solicitado' e 'concluido' superior ao tempo médio de conclusão dos pedidos da mesma loja?"
+-- Ator: Administração / Auditoria operacional (RF05/RF10/RN04).
+-- Técnica: Junções internas + subconsulta correlacionada escalar comparando a duração do pedido com a média da própria loja.
+-- Tabelas: pedido, historico_pedido.
+SELECT p.id_pedido,
+       p.id_loja,
+       hp_ini.data_hora AS solicitado_em,
+       hp_fim.data_hora AS concluido_em,
+       ROUND(EXTRACT(EPOCH FROM (hp_fim.data_hora - hp_ini.data_hora)) / 60.0, 2) AS duracao_total_minutos
+  FROM pedido p
+INNER JOIN historico_pedido hp_ini
+        ON hp_ini.id_pedido = p.id_pedido
+       AND hp_ini.status = 'solicitado'
+INNER JOIN historico_pedido hp_fim
+        ON hp_fim.id_pedido = p.id_pedido
+       AND hp_fim.status = 'concluido'
+ WHERE EXTRACT(EPOCH FROM (hp_fim.data_hora - hp_ini.data_hora)) > (
+           SELECT AVG(EXTRACT(EPOCH FROM (hp2_fim.data_hora - hp2_ini.data_hora)))
+             FROM pedido p2
+           INNER JOIN historico_pedido hp2_ini
+                   ON hp2_ini.id_pedido = p2.id_pedido
+                  AND hp2_ini.status = 'solicitado'
+           INNER JOIN historico_pedido hp2_fim
+                   ON hp2_fim.id_pedido = p2.id_pedido
+                  AND hp2_fim.status = 'concluido'
+            WHERE p2.id_loja = p.id_loja
+       )
+ ORDER BY duracao_total_minutos DESC, p.id_pedido;
