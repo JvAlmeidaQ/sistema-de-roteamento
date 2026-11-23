@@ -2,6 +2,7 @@
  * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
  * Feature Flag: VITE_APP_MODE (RNF02)
  */
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { GestaoPedidosPage } from '@/features/comercio/components/GestaoPedidosPage'
 import { NavbarComercio } from '@/features/comercio/components/NavbarComercio'
@@ -9,6 +10,12 @@ import { NovoPedidoPage } from '@/features/comercio/components/NovoPedidoPage'
 import { RelatoriosFinanceirosPage } from '@/features/comercio/components/RelatoriosFinanceirosPage'
 
 const isBd = import.meta.env.VITE_APP_MODE === 'bd'
+const PainelEntregadorPage = !isBd
+  ? lazy(() => import('@/features/logistica/components/PainelEntregadorPage'))
+  : null
+const RastreioPedido = !isBd
+  ? lazy(() => import('@/features/logistica/components/RastreioPedido'))
+  : null
 
 export function AppRoutes() {
   return (
@@ -19,6 +26,26 @@ export function AppRoutes() {
           <Route path="/" element={<NovoPedidoPage />} />
           <Route path="/relatorios" element={<RelatoriosFinanceirosPage />} />
           {!isBd && <Route path="/pedidos" element={<GestaoPedidosPage />} />}
+          {PainelEntregadorPage && (
+            <Route
+              path="/painel-entregador"
+              element={(
+                <Suspense fallback={<p role="status">Carregando painel do entregador…</p>}>
+                  <PainelEntregadorPage />
+                </Suspense>
+              )}
+            />
+          )}
+          {RastreioPedido && (
+            <Route
+              path="/rastreio/:id"
+              element={(
+                <Suspense fallback={<p role="status">Carregando rastreio…</p>}>
+                  <RastreioPedido />
+                </Suspense>
+              )}
+            />
+          )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

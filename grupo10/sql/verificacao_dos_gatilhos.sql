@@ -401,6 +401,10 @@ BEGIN
     UPDATE entrega SET status = 'a_caminho' WHERE id_entrega = v_id_entrega;
     UPDATE entrega SET status = 'entregue' WHERE id_entrega = v_id_entrega;
 
+    -- Regravar o mesmo status não deve duplicar eventos em historico_pedido nem historico_entrega.
+    UPDATE pedido SET status = status WHERE id_pedido = v_id_pedido;
+    UPDATE entrega SET status = status WHERE id_entrega = v_id_entrega;
+
     SELECT COUNT(*) INTO v_qtd_hist_pedido
       FROM historico_pedido
      WHERE id_pedido = v_id_pedido;
