@@ -1,8 +1,9 @@
 -- =============================================================================
 -- VERIFICAÇÃO DOS GATILHOS — ENTREGA E6 (SEÇÃO 7.3)
 -- Pré-requisito: 01_esquema.sql, 02_carga.sql e 06_triggers.sql.
+-- O bloco de rastreio (DCC061) requer também as migrações 08 e 09.
 -- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
--- (mesma sequência de 01_esquema.sql).
+-- -> Auditoria (mesma sequência de 01_esquema.sql).
 -- Todos os testes rodam em transação com ROLLBACK ao final, preservando a carga.
 -- =============================================================================
 
@@ -338,6 +339,122 @@ BEGIN
     END IF;
 
     RAISE NOTICE 'PASSOU: verificação dos quatro gatilhos de Logística';
+END;
+$$;
+
+
+-- =============================================================================
+-- DCC061: AUDITORIA DE RASTREIO (RN04, RN08 e RR11)
+-- =============================================================================
+
+DO $$
+DECLARE
+    v_id_pedido      BIGINT;
+    v_id_entrega     BIGINT;
+    v_id_rota        BIGINT;
+    v_fluxo_pedido   CONSTANT status_pedido[] :=
+        ARRAY['solicitado', 'aceito', 'pago', 'em_preparacao', 'pronto']::status_pedido[];
+    v_fluxo_entrega  CONSTANT status_entrega[] :=
+        ARRAY['aguardando_entregador', 'aceita', 'a_caminho', 'entregue']::status_entrega[];
+    v_operacao       TEXT;
+    v_constraint     TEXT;
+BEGIN
+    -- Reaproveita os vínculos da fixture de Logística, sem copiar eventos legados.
+    INSERT INTO pedido (id_loja, id_cliente, id_endereco, forma_pagamento,
+                        subtotal, taxa_entrega, taxa_servico, valor_total)
+    SELECT p.id_loja, p.id_cliente, p.id_endereco, p.forma_pagamento,
+           p.subtotal, p.taxa_entrega, p.taxa_servico, p.valor_total
+      FROM pedidos_teste_logistica t
+      JOIN pedido p USING (id_pedido)
+     ORDER BY p.id_pedido
+     LIMIT 1
+    RETURNING id_pedido INTO STRICT v_id_pedido;
+
+    -- O primeiro passo verifica o INSERT; os demais verificam cada transição.
+    FOR v_etapa IN 1..cardinality(v_fluxo_pedido) LOOP
+        IF v_etapa > 1 THEN
+            UPDATE pedido SET status = v_fluxo_pedido[v_etapa] WHERE id_pedido = v_id_pedido;
+        END IF;
+
+        IF (SELECT array_agg(status ORDER BY status) FROM historico_pedido WHERE id_pedido = v_id_pedido)
+            IS DISTINCT FROM v_fluxo_pedido[1:v_etapa] THEN
+            RAISE EXCEPTION 'Falhou (RN04): histórico do pedido não corresponde ao fluxo até %',
+                v_fluxo_pedido[v_etapa];
+        END IF;
+    END LOOP;
+
+    UPDATE pedido SET status = status WHERE id_pedido = v_id_pedido;
+    IF NOT FOUND OR
+        (SELECT array_agg(status ORDER BY status) FROM historico_pedido WHERE id_pedido = v_id_pedido)
+            IS DISTINCT FROM v_fluxo_pedido THEN
+        RAISE EXCEPTION 'Falhou (RN04): regravar o mesmo status do pedido deve preservar o histórico';
+    END IF;
+
+    -- Usa a entrega criada pelo fluxo RN12 e uma rota exclusiva desta fixture.
+    SELECT id_entrega INTO STRICT v_id_entrega FROM entrega WHERE id_pedido = v_id_pedido;
+    INSERT INTO rota (id_entregador)
+    SELECT id_pessoa FROM entregador ORDER BY id_pessoa LIMIT 1
+    RETURNING id_rota INTO STRICT v_id_rota;
+
+    FOR v_etapa IN 1..cardinality(v_fluxo_entrega) LOOP
+        IF v_etapa = 2 THEN
+            UPDATE entrega SET status = v_fluxo_entrega[v_etapa], id_rota = v_id_rota
+             WHERE id_entrega = v_id_entrega;
+        ELSIF v_etapa > 2 THEN
+            UPDATE entrega SET status = v_fluxo_entrega[v_etapa] WHERE id_entrega = v_id_entrega;
+        END IF;
+
+        IF (SELECT array_agg(status ORDER BY status) FROM historico_entrega WHERE id_entrega = v_id_entrega)
+            IS DISTINCT FROM v_fluxo_entrega[1:v_etapa] THEN
+            RAISE EXCEPTION 'Falhou (RN04): histórico da entrega não corresponde ao fluxo até %',
+                v_fluxo_entrega[v_etapa];
+        END IF;
+    END LOOP;
+
+    IF (SELECT array_agg(status ORDER BY status) FROM historico_pedido WHERE id_pedido = v_id_pedido)
+        IS DISTINCT FROM (v_fluxo_pedido || 'concluido'::status_pedido) THEN
+        RAISE EXCEPTION 'Falhou (RN04): finalizar a entrega deve acrescentar concluido ao histórico do pedido';
+    END IF;
+
+    UPDATE entrega SET status = status WHERE id_entrega = v_id_entrega;
+    IF NOT FOUND OR
+        (SELECT array_agg(status ORDER BY status) FROM historico_entrega WHERE id_entrega = v_id_entrega)
+            IS DISTINCT FROM v_fluxo_entrega THEN
+        RAISE EXCEPTION 'Falhou (RN04): regravar o mesmo status da entrega deve preservar o histórico';
+    END IF;
+
+    -- Cada tentativa atinge um evento inicial cuja existência foi verificada acima.
+    -- A migração 08 usa 23514: não o capture, pois a 09 deve alinhar o código a 23001.
+    FOREACH v_operacao IN ARRAY ARRAY[
+        'UPDATE historico_pedido', 'DELETE historico_pedido',
+        'UPDATE historico_entrega', 'DELETE historico_entrega'
+    ] LOOP
+        BEGIN
+            CASE v_operacao
+                WHEN 'UPDATE historico_pedido' THEN
+                    UPDATE historico_pedido SET data_hora = data_hora + INTERVAL '1 second'
+                     WHERE id_pedido = v_id_pedido AND status = 'solicitado';
+                WHEN 'DELETE historico_pedido' THEN
+                    DELETE FROM historico_pedido WHERE id_pedido = v_id_pedido AND status = 'solicitado';
+                WHEN 'UPDATE historico_entrega' THEN
+                    UPDATE historico_entrega SET data_hora = data_hora + INTERVAL '1 second'
+                     WHERE id_entrega = v_id_entrega AND status = 'aguardando_entregador';
+                WHEN 'DELETE historico_entrega' THEN
+                    DELETE FROM historico_entrega WHERE id_entrega = v_id_entrega AND status = 'aguardando_entregador';
+            END CASE;
+            RAISE EXCEPTION 'Falhou (RN08/RR11): % não foi recusado com SQLSTATE 23001', v_operacao;
+        EXCEPTION
+            WHEN restrict_violation THEN  -- SQLSTATE 23001
+                GET STACKED DIAGNOSTICS v_constraint = CONSTRAINT_NAME;
+                IF v_constraint IS DISTINCT FROM 'ck_historico_imutavel'
+                   AND SQLERRM NOT LIKE '%RN08/RR11%' THEN
+                    RAISE EXCEPTION 'Falhou (RN08/RR11): % retornou 23001 sem identificar a regra (constraint: %, mensagem: %)',
+                        v_operacao, v_constraint, SQLERRM;
+                END IF;
+        END;
+    END LOOP;
+
+    RAISE NOTICE 'PASSOU: verificação dos gatilhos de rastreio (RN04, RN08, RR11)';
 END;
 $$;
 

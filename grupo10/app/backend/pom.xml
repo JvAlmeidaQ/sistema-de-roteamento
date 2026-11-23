@@ -115,6 +115,8 @@
                                         <include>05_visoes.sql</include>
                                         <include>06_triggers.sql</include>
                                         <include>07_indices.sql</include>
+                                        <include>08_historicos_rastreio.sql</include>
+                                        <include>09_alinha_sqlstate_historico.sql</include>
                                     </includes>
                                 </resource>
                             </resources>

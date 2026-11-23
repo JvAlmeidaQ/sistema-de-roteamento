@@ -140,7 +140,7 @@ Quando uma restrição do PostgreSQL é acionada, o driver JDBC retorna um códi
 ## 4. Diretrizes de Verificação e Testes
 
 1. **Testes contra banco PostgreSQL real:** Regras baseadas em `CHECK`, FKs compostas e gatilhos não devem ser validadas em bancos em memória (como H2). Utilize o container **PostgreSQL 18** (`docker/compose.yaml` ou _Testcontainers_) executando os scripts oficiais (`01_esquema.sql` e `06_triggers.sql`).
-2. **Cobertura positiva e negativa por regra:** No script `03_verificacao.sql` e nos testes de integração da aplicação, cada regra da Seção 2 deve possuir ao menos um caso de sucesso e um caso que comprova a rejeição da operação inválida.
+2. **Cobertura positiva e negativa por regra:** Cubra as regras da Seção 2 com cenários positivos e negativos nos testes de integração. Na camada SQL, verifique restrições do esquema em `03_verificacao.sql` e gatilhos em `verificacao_dos_gatilhos.sql`. O bloco de rastreio deste último requer as migrações `08` e `09`.
 3. **Verificação no `COMMIT` para gatilhos adiados ([ADR-003](./adrs/ADR-003-especializacao-pessoa-cardinalidade-minima.md)):** Testes das restrições `DEFERRABLE INITIALLY DEFERRED` (`RR01` e, caso implementadas, as opcionais `RR16–RR19`) devem executar o `COMMIT` da transação para comprovar que a violação é detectada ao final da unidade de trabalho.
 4. **Teste de concorrência (`RN02`):** Ao menos um teste de integração deve simular duas transações simultâneas tentando alocar a 2ª vaga de uma mesma `Rota`, comprovando a eficácia do `SELECT ... FOR UPDATE`.
 
