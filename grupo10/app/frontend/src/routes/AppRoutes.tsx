@@ -7,6 +7,7 @@ import { GestaoPedidosPage } from '@/features/comercio/components/GestaoPedidosP
 import { NavbarComercio } from '@/features/comercio/components/NavbarComercio'
 import { NovoPedidoPage } from '@/features/comercio/components/NovoPedidoPage'
 import { RelatoriosFinanceirosPage } from '@/features/comercio/components/RelatoriosFinanceirosPage'
+import { PainelLojistaPage } from '@/features/catalogo/components/PainelLojistaPage'
 
 const isBd = import.meta.env.VITE_APP_MODE === 'bd'
 
@@ -18,7 +19,12 @@ export function AppRoutes() {
         <Routes>
           <Route path="/" element={<NovoPedidoPage />} />
           <Route path="/relatorios" element={<RelatoriosFinanceirosPage />} />
-          {!isBd && <Route path="/pedidos" element={<GestaoPedidosPage />} />}
+          {!isBd && (
+            <>
+              <Route path="/pedidos" element={<GestaoPedidosPage />} />
+              <Route path="/catalogo" element={<PainelLojistaPage />} />
+            </>
+          )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
