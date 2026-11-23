@@ -394,7 +394,7 @@ $$;
 
 -- RN08/RR11 (Seção 2): bloqueio absoluto de UPDATE, DELETE e TRUNCATE nas
 -- tabelas de trilha cronológica (historico_pedido e historico_entrega),
--- garantindo que o histórico de auditoria seja estritamente append-only (ADR-004).
+-- garantindo que o histórico de auditoria seja estritamente append-only.
 -- Por que CHECK não resolve: restrições declarativas (CHECK, UNIQUE, FK) não
 -- interceptam operações de remoção (DELETE/TRUNCATE) nem bloqueiam mutações
 -- arbitrárias em registros históricos já persistidos. Apenas gatilhos BEFORE
@@ -414,7 +414,7 @@ END;
 $$;
 
 -- RN04 (Seção 2): gravação automática de evento cronológico em historico_pedido
--- a cada criação ou mudança de status do pedido (ADR-004).
+-- a cada criação ou mudança de status do pedido.
 -- Por que CHECK não resolve: restrições CHECK apenas validam colunas da própria
 -- linha e não inserem registros derivados na tabela historico_pedido.
 CREATE FUNCTION auditoria_registrar_historico_pedido()
@@ -434,7 +434,7 @@ END;
 $$;
 
 -- RN04 (Seção 2): gravação automática de evento cronológico em historico_entrega
--- a cada criação ou mudança de status da entrega (ADR-004).
+-- a cada criação ou mudança de status da entrega.
 -- Por que CHECK não resolve: restrições CHECK não propagam eventos de transição
 -- de estado para a tabela historico_entrega.
 CREATE FUNCTION auditoria_registrar_historico_entrega()

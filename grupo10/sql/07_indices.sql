@@ -91,8 +91,8 @@ CREATE INDEX idx_entrega_ativa_previsao_pedido
 -- Benefício: Como a PK composta (id_pedido, status) começa por id_pedido, este
 -- índice acelera buscas e ordenações temporais filtradas por status (ex.:
 -- pedidos 'aceito' ordenados por aceito_em na Consulta 20 e filtros por janela
--- temporal de status = 'concluido' cruzando com pedido em experimentos_auditoria.md),
--- eliminando Seq Scan e Sort em volume > 200.000 linhas (RNF04).
+-- temporal de status = 'concluido' cruzando com pedido em experimentos.md),
+-- eliminando Seq Scan e Sort em volume > 200.000 linhas.
 CREATE INDEX idx_historico_pedido_status_data_hora
     ON historico_pedido USING btree (status, data_hora);
 
@@ -108,7 +108,7 @@ CREATE INDEX idx_historico_entrega_status_data_hora
 -- Benefício: Acelera filtros e cruzamentos por janela temporal de criação do
 -- pedido (pedido.data_pedido) quando correlacionados com os marcos auditados
 -- em historico_pedido e historico_entrega para relatórios de tempo de ciclo
--- operacional e SLA (RF10 / RNF04).
+-- operacional e SLA (RF10).
 CREATE INDEX idx_pedido_data_pedido
     ON pedido USING btree (data_pedido);
 

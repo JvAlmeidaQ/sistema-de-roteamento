@@ -122,8 +122,8 @@ INNER JOIN pessoa AS p
 -- =============================================================================
 
 -- Visão 5: "Cliente, Lojista, Entregador e Administração / Auditoria do Sistema"
--- Objetivo: Consolidar, em uma única linha do tempo cronológica, os marcos do ciclo comercial (historico_pedido) e do ciclo logístico (historico_entrega) associados a cada pedido, permitindo consultar o rastreio completo passo a passo sem reescrever junções e uniões entre os dois subdomínios (RF05, RN04, ADR-004).
--- Atualizável? Justifique: Não. A definição utiliza o operador de conjunto UNION ALL, combina múltiplas tabelas no FROM com junções internas (INNER JOIN) e projeta colunas derivadas por literais e conversões de tipo (dominio_evento, status_evento), fazendo com que is_updatable = NO no PostgreSQL. Além disso, pela regra de negócio (RN08, RR11, ADR-004), as tabelas de auditoria são estritamente append-only e imutáveis, devendo ser alimentadas exclusivamente pelos gatilhos de transição de estado.
+-- Objetivo: Consolidar, em uma única linha do tempo cronológica, os marcos do ciclo comercial (historico_pedido) e do ciclo logístico (historico_entrega) associados a cada pedido, permitindo consultar o rastreio completo passo a passo sem reescrever junções e uniões entre os dois subdomínios (RF05, RN04).
+-- Atualizável? Justifique: Não. A definição utiliza o operador de conjunto UNION ALL, combina múltiplas tabelas no FROM com junções internas (INNER JOIN) e projeta colunas derivadas por literais e conversões de tipo (dominio_evento, status_evento), fazendo com que is_updatable = NO no PostgreSQL. Além disso, pela regra de negócio (RN08, RR11), as tabelas de auditoria são estritamente append-only e imutáveis, devendo ser alimentadas exclusivamente pelos gatilhos de transição de estado.
 CREATE OR REPLACE VIEW vw_auditoria_linha_tempo_pedido AS
 SELECT p.id_pedido,
        p.id_loja,
@@ -151,7 +151,7 @@ INNER JOIN pedido p
 
 -- Visão 6: "Lojista e Administração / Auditoria Operacional (painel de pontualidade e SLA de entregas)"
 -- Objetivo: Cruzar o carimbo real de conclusão registrado na trilha de auditoria (historico_entrega com status 'entregue') com a previsão contratada (entrega.previsao_entrega) e os dados do pedido e da loja, expondo de forma pronta para relatórios se houve atraso e o desvio em minutos (RF06, RF10, RN03, RN04).
--- Atualizável? Justifique: Não. A consulta combina quatro tabelas no FROM por meio de junções internas (historico_entrega, entrega, pedido e loja) e projeta colunas calculadas por expressões booleanas e aritméticas (atrasada e desvio_minutos), tornando-a somente leitura no PostgreSQL (is_updatable = NO) e preservando a imutabilidade dos registros de auditoria (RN08, RR11, ADR-004).
+-- Atualizável? Justifique: Não. A consulta combina quatro tabelas no FROM por meio de junções internas (historico_entrega, entrega, pedido e loja) e projeta colunas calculadas por expressões booleanas e aritméticas (atrasada e desvio_minutos), tornando-a somente leitura no PostgreSQL (is_updatable = NO) e preservando a imutabilidade dos registros de auditoria (RN08, RR11).
 CREATE OR REPLACE VIEW vw_auditoria_sla_entregas AS
 SELECT e.id_entrega,
        e.id_pedido,
