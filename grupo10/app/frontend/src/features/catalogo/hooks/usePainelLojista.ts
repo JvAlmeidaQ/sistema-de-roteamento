@@ -130,7 +130,7 @@ export function usePainelLojista(usuarioAtual: UsuarioSessao | null) {
       const atualizada = await catalogoApi.atualizarStatusLoja(loja.idLoja, novoStatus)
       setLoja(atualizada)
       setMensagemSucesso(
-        `Loja ${novoStatus === 'aberta' ? 'aberta' : 'fechada'} com sucesso! (RF07)`
+        `Loja ${novoStatus === 'aberta' ? 'aberta' : 'fechada'} com sucesso.`
       )
     } catch (e) {
       setErroOperacao(extrairMensagemErro(e))
@@ -242,7 +242,7 @@ export function usePainelLojista(usuarioAtual: UsuarioSessao | null) {
         return atualizados
       })
       setMensagemSucesso(
-        `Produto ${atualizado.ativo ? 'ativado' : 'pausado'} com sucesso! (RF07)`
+        `Produto ${atualizado.ativo ? 'ativado' : 'pausado'} com sucesso.`
       )
     } catch (e) {
       setErroOperacao(extrairMensagemErro(e))

@@ -32,7 +32,7 @@ public class AvaliacaoService {
         validarElegibilidade(idCliente, idPedido);
 
         if (avaliacaoRepository.buscarAvaliacaoLoja(idPedido).isPresent()) {
-            throw new ConflitoNegocioException("[RF08] A loja já foi avaliada para o pedido " + idPedido + ".");
+            throw new ConflitoNegocioException("A loja já foi avaliada para este pedido.");
         }
 
         return avaliacaoRepository.inserirAvaliacaoLoja(idPedido, requisicao.nota(), requisicao.comentario());
@@ -43,7 +43,7 @@ public class AvaliacaoService {
         validarElegibilidade(idCliente, idPedido);
 
         if (avaliacaoRepository.buscarAvaliacaoEntregador(idPedido).isPresent()) {
-            throw new ConflitoNegocioException("[RF08] O entregador já foi avaliado para o pedido " + idPedido + ".");
+            throw new ConflitoNegocioException("O entregador já foi avaliado para este pedido.");
         }
 
         return avaliacaoRepository.inserirAvaliacaoEntregador(idPedido, requisicao.nota(), requisicao.comentario());
@@ -59,7 +59,7 @@ public class AvaliacaoService {
 
         if (pedido.getStatus() != StatusPedido.concluido || !pedidoRepository.entregaEstaConcluida(idPedido)) {
             throw new RegraNegocioException(
-                    "[RN13/RR08] A avaliação só pode ser registrada após o pedido estar concluído e entregue."
+                    "A avaliação só pode ser registrada após a entrega ser concluída."
             );
         }
     }

@@ -76,7 +76,7 @@ Tomamos uma decisão arquitetural deliberada: **NÃO utilizamos ORMs tradicionai
 
 - **Vite 8 & React Router 7:** Roteamento SPA com proxy de desenvolvimento configurado (`/api` → `http://localhost:8080`).
 - **React Hook Form + Zod (`@hookform/resolvers`):** Toda entrada de formulário é validada no cliente com schemas **Zod** espelhando as regras de negócio da [Especificação de Validações](./especificacao_validacoes.md).
-- **Axios (`src/lib/api.ts`):** Instância centralizada apontando para `/api`, com interceptor automático que injeta o cabeçalho `X-User-Id` a partir do `sessionStorage` para simular o contexto do ator logado (Cliente, Lojista ou Entregador).
+- **Axios (`src/lib/api.ts`):** Instância centralizada apontando para `/api`, com interceptor automático que injeta os cabeçalhos `X-User-Id` e `X-Active-Role` a partir do `sessionStorage` para identificar o usuário e o papel ativo da sessão (Cliente, Lojista, Entregador ou Administrador).
 - **TailwindCSS v4 (`@tailwindcss/vite`):** Estilização utilitária moderna com suporte a `clsx` e `tailwind-merge` (`src/lib/cn.ts`).
 
 ---
@@ -351,7 +351,7 @@ cd ../../..
 ## 5. Notas Técnicas de Arquitetura (Boas Práticas)
 
 1. **Integração Direta Vite → Spring Boot (`static/`):** O `vite.config.ts` já aponta `outDir` diretamente para `../backend/src/main/resources/static`. Portanto, não é necessário copiar pastas manualmente após rodar `npm run build` ou `npm run build:bd`.
-2. **Fallback de Rotas SPA no Spring Boot:** Como o frontend usa `BrowserRouter` (`react-router-dom`), se o usuário recarregar a página (F5) em uma rota como `http://localhost:8080/relatorios` quando estiver rodando pelo Spring Boot na porta `8080`, o Tomcat tentará buscar um recurso físico `/relatorios` e retornará `404` se não houver redirecionamento para `index.html`. Recomendamos incluir um controlador simples no Spring Boot (ex.: `SpaForwardController`) que encaminhe rotas de interface (`!path.startsWith("/api")`) para `forward:/index.html`.
+2. **Fallback de Rotas SPA no Spring Boot:** Como o frontend usa `BrowserRouter` (`react-router-dom`), se o usuário recarregar a página (F5) em uma rota como `http://localhost:8080/relatorios` quando estiver rodando pelo Spring Boot na porta `8080`, o Tomcat tentará buscar um recurso físico `/relatorios` e retornará `404` se não houver redirecionamento para `index.html`. Essa regra já está implementada em `core/web/SpaForwardController.java`, que encaminha rotas de interface (`!path.startsWith("/api")`) para `forward:/index.html`.
 3. **Caminhos Relativos Sincronizados (`grupo10`):**
    - No `grupo10/app/backend/pom.xml`, a propriedade `<sql.dir>` aponta para `${project.basedir}/../../sql` (`grupo10/sql/`).
    - Em `docker/docker-compose.yml` e `.github/workflows/ci.yml`, os volumes e steps apontam para `grupo10/sql` e `grupo10/app/backend`.

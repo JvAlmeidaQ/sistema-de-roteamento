@@ -14,9 +14,12 @@ import br.ufjf.dcc.entregas.core.exception.ConflitoNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
+import br.ufjf.dcc.entregas.core.security.AdminAccessService;
+import br.ufjf.dcc.entregas.features.identidade.dto.DisponibilidadeResponse;
 import br.ufjf.dcc.entregas.features.identidade.dto.PerfilRequest;
 import br.ufjf.dcc.entregas.features.identidade.dto.PerfilResponse;
 import br.ufjf.dcc.entregas.features.identidade.dto.PessoaResumoResponse;
+import br.ufjf.dcc.entregas.features.identidade.dto.SessaoAutenticadaResponse;
 import br.ufjf.dcc.entregas.features.identidade.repository.PerfilRepository;
 import br.ufjf.dcc.entregas.features.identidade.repository.PerfilRepository.PapeisPessoa;
 import br.ufjf.dcc.entregas.features.identidade.repository.PerfilRepository.TelefoneNovo;
@@ -40,22 +43,81 @@ import java.util.Set;
 public class PerfilService {
 
     private final PerfilRepository repository;
+    private final AdminAccessService adminAccessService;
 
-    public PerfilService(PerfilRepository repository) {
+    public PerfilService(PerfilRepository repository, AdminAccessService adminAccessService) {
         this.repository = repository;
+        this.adminAccessService = adminAccessService;
     }
 
     // ================================================================== consultas
 
-    public List<PessoaResumoResponse> listarPessoas(String busca) {
+    public List<PessoaResumoResponse> listarPessoas(Long idUsuarioAutenticado, String busca) {
+        adminAccessService.exigirAdmin(idUsuarioAutenticado);
         return repository.listarPessoas(busca);
     }
 
-    private void validarProprietario(Long idUsuarioAutenticado, Long idPessoa) {
-        if (idUsuarioAutenticado == null || idUsuarioAutenticado <= 0) {
-            throw new AcessoNegadoException("Cabeçalho X-User-Id é obrigatório para acessar ou editar este perfil.");
+    public DisponibilidadeResponse verificarDisponibilidade(String email, String cpf) {
+        boolean emailDisponivel = true;
+        if (email != null && !email.isBlank()) {
+            emailDisponivel = !repository.existeEmailEmOutraPessoa(normalizarEmail(email), null);
         }
-        if (!idUsuarioAutenticado.equals(idPessoa)) {
+        boolean cpfDisponivel = true;
+        if (cpf != null && !cpf.isBlank()) {
+            String digitos = cpf.replaceAll("\\D", "");
+            if (digitos.length() == 11) {
+                cpfDisponivel = !repository.existeCpf(digitos);
+            }
+        }
+        return new DisponibilidadeResponse(emailDisponivel, cpfDisponivel);
+    }
+
+    public SessaoAutenticadaResponse entrar(String identificador) {
+        if (identificador == null || identificador.isBlank()) {
+            throw new RequisicaoInvalidaException("Informe o e-mail ou CPF cadastrado.");
+        }
+        String limpo = identificador.trim();
+        String emailNorm = limpo.contains("@") ? normalizarEmail(limpo) : null;
+        String cpfDigitos = limpo.contains("@") ? null : limpo.replaceAll("\\D", "");
+
+        PessoaRecord pessoa = repository.buscarPessoaPorEmailOuCpf(emailNorm, cpfDigitos)
+                .orElseThrow(() -> new RecursoNaoEncontradoException(
+                        "Nenhuma conta encontrada com o e-mail ou CPF informado."
+                ));
+        if (adminAccessService.isAdmin(pessoa.getIdPessoa()) && emailNorm != null) {
+            throw new AcessoNegadoException("Contas administrativas devem entrar informando o CPF.");
+        }
+        return montarSessaoAutenticada(pessoa);
+    }
+
+    public SessaoAutenticadaResponse obterSessao(Long idUsuarioAutenticado) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+        PessoaRecord pessoa = repository.buscarPessoa(idUsuarioAutenticado)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Conta não encontrada."));
+        return montarSessaoAutenticada(pessoa);
+    }
+
+    private SessaoAutenticadaResponse montarSessaoAutenticada(PessoaRecord pessoa) {
+        PapeisPessoa papeis = repository.buscarPapeis(pessoa.getIdPessoa());
+        var loja = papeis.lojista()
+                ? repository.buscarPrimeiraLojaResumo(pessoa.getIdPessoa()).orElse(null)
+                : null;
+        return new SessaoAutenticadaResponse(
+                pessoa.getIdPessoa(),
+                pessoa.getNome(),
+                pessoa.getEmail(),
+                papeis.cliente(),
+                papeis.lojista(),
+                papeis.entregador(),
+                adminAccessService.isAdmin(pessoa.getIdPessoa()),
+                loja != null ? loja.idLoja() : null,
+                loja != null ? loja.nome() : null
+        );
+    }
+
+    private void validarProprietario(Long idUsuarioAutenticado, Long idPessoa) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+        if (!idUsuarioAutenticado.equals(idPessoa) && !adminAccessService.isAdmin(idUsuarioAutenticado)) {
             throw new AcessoNegadoException("Você só tem permissão para visualizar ou editar o seu próprio perfil.");
         }
     }
@@ -102,7 +164,7 @@ public class PerfilService {
             throw new RequisicaoInvalidaException("CPF é obrigatório no cadastro.");
         }
         if (!DocumentoValidator.cpfValido(cpf)) {
-            throw new RegraNegocioException("[RN11] CPF inválido: os dígitos verificadores não conferem.");
+            throw new RegraNegocioException("CPF inválido: os dígitos verificadores não conferem.");
         }
         String nome = request.nome().trim();
         String email = normalizarEmail(request.email());
@@ -275,11 +337,11 @@ public class PerfilService {
     /** Regras que valem tanto para criação quanto para edição. */
     private void validarRegrasComuns(PerfilRequest request) {
         if (!request.cliente() && !request.lojista() && !request.entregador()) {
-            throw new RegraNegocioException("[RR16] A pessoa deve exercer ao menos um papel: Cliente, Lojista ou Entregador.");
+            throw new RegraNegocioException("Selecione ao menos um papel: Cliente, Lojista ou Entregador.");
         }
 
         if (request.telefones().isEmpty()) {
-            throw new RegraNegocioException("[RR17] Informe ao menos um telefone.");
+            throw new RegraNegocioException("Informe ao menos um telefone.");
         }
         Set<String> numeros = new HashSet<>();
         for (PerfilRequest.Telefone telefone : request.telefones()) {
@@ -313,7 +375,7 @@ public class PerfilService {
             throw new RegraNegocioException("Não é possível remover o papel de Cliente: a pessoa possui pedidos registrados.");
         }
         if (papeis.lojista() && !request.lojista() && repository.lojistaPossuiLojas(idPessoa)) {
-            throw new RegraNegocioException("[RR01] Não é possível remover o papel de Lojista: a pessoa é responsável por loja(s) cadastrada(s).");
+            throw new RegraNegocioException("Não é possível remover o papel de Lojista enquanto houver loja vinculada.");
         }
         if (papeis.entregador() && !request.entregador() && repository.entregadorPossuiRotas(idPessoa)) {
             throw new RegraNegocioException("Não é possível remover o papel de Entregador: a pessoa possui rotas registradas.");
@@ -329,10 +391,10 @@ public class PerfilService {
 
     private void validarPrimeiraLoja(PerfilRequest.LojaInicial loja) {
         if (loja == null) {
-            throw new RegraNegocioException("[RR01] Todo Lojista deve possuir ao menos uma loja: preencha os dados da primeira loja.");
+            throw new RegraNegocioException("Todo Lojista deve possuir ao menos uma loja: preencha os dados da primeira loja.");
         }
         if (!DocumentoValidator.cnpjValido(loja.cnpj())) {
-            throw new RegraNegocioException("[RN11] CNPJ inválido: os dígitos verificadores não conferem.");
+            throw new RegraNegocioException("CNPJ inválido: os dígitos verificadores não conferem.");
         }
         converterStatusFuncionamento(loja.statusFuncionamento());
         if (repository.existeCnpj(loja.cnpj())) {

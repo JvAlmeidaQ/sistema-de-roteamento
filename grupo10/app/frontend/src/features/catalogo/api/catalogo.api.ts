@@ -27,14 +27,11 @@ interface ApiErrorPayload {
 export function extrairMensagemErro(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as ApiErrorPayload | undefined
-    const statusCode = data?.status ?? err.response?.status
     if (data?.message) {
-      const prefixoHttp = statusCode ? `[HTTP ${statusCode}] ` : ''
       const details = data.details?.length ? ` (${data.details.join('; ')})` : ''
-      const sqlState = data.sqlState ? ` [SQLSTATE ${data.sqlState}]` : ''
-      return `${prefixoHttp}${data.message}${details}${sqlState}`
+      return `${data.message}${details}`
     }
-    return statusCode ? `[HTTP ${statusCode}] ${err.message}` : err.message
+    return 'Não foi possível concluir a solicitação. Tente novamente.'
   }
   if (err instanceof Error) return err.message
   return 'Erro inesperado ao comunicar com o servidor.'

@@ -1,23 +1,25 @@
 /**
- * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
- * Subdomínio: Comércio e Finanças
+ * Disciplina: DCC061 (Engenharia de Software)
+ * Barra de navegação principal adaptada ao papel ativo da sessão.
  */
-import { Link, NavLink } from 'react-router-dom'
-import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
-import type { UsuarioSessao } from '../types/comercio.types'
-
-const isBd = import.meta.env.VITE_APP_MODE === 'bd'
-
-function rotuloUsuario(usuario: UsuarioSessao) {
-  const perfis: string[] = []
-  if (!isBd && usuario.perfilEntregador) perfis.push('Entregador')
-  if (usuario.perfilCliente) perfis.push('Cliente')
-  if (usuario.perfilLojista) perfis.push(usuario.nomeLoja ? `Lojista: ${usuario.nomeLoja}` : 'Lojista')
-  return `#${usuario.idPessoa} · ${usuario.nome}${perfis.length ? ` (${perfis.join(' · ')})` : ''}`
-}
+import { LogOut, PackageCheck, ShieldCheck, Store, Truck, User } from 'lucide-react'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
+import {
+  ROTULO_PAPEL,
+  rotaInicialPorPapel,
+  useSessaoUsuario,
+  type PapelAtivo,
+} from '@/context/SessaoUsuarioContext'
 
 export function NavbarComercio() {
-  const { usuarios, usuarioAtual, selecionarUsuario, carregandoUsuarios, errosUsuarios } = useSessaoUsuario()
+  const {
+    usuarioAtual,
+    papelAtivo,
+    papeisDisponiveis,
+    selecionarPapel,
+    sair,
+  } = useSessaoUsuario()
+  const navigate = useNavigate()
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     `rounded-full px-4 py-2 text-sm font-semibold transition-colors ${
@@ -26,95 +28,151 @@ export function NavbarComercio() {
         : 'text-white/85 hover:bg-white/10 hover:text-white'
     }`
 
+  const handleTrocarPapel = (novoPapel: PapelAtivo) => {
+    selecionarPapel(novoPapel)
+    navigate(rotaInicialPorPapel(novoPapel))
+  }
+
+  const handleSair = () => {
+    sair()
+    navigate('/entrar')
+  }
+
   return (
     <header className="bg-brand-dark text-white shadow-low">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-lime font-display text-lg font-bold text-brand-dark">
-            CF
+        <Link
+          to={usuarioAtual ? rotaInicialPorPapel(papelAtivo) : '/entrar'}
+          className="flex items-center gap-3 rounded-2xl focus-visible:outline-2 focus-visible:outline-brand-lime"
+        >
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-lime text-brand-dark">
+            <PackageCheck className="h-5 w-5" aria-hidden="true" />
           </div>
           <div>
             <h1 className="font-display text-lg font-semibold leading-tight text-white">
               Roteamento de Pedidos
             </h1>
-            <p className="text-xs text-white/75">
-              Comércio e Finanças · Modo{' '}
-              <span className="font-semibold text-brand-lime">
-                {isBd ? 'BD (Estrito)' : 'ES (Completo)'}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        <nav className="flex flex-wrap items-center gap-2" aria-label="Navegação principal">
-          <NavLink to="/" end className={linkClass}>
-            Novo Pedido (RF02)
-          </NavLink>
-          {!isBd && (
-            <>
-              <NavLink to="/pedidos" className={linkClass}>
-                Gestão de Pedidos (RF03–RF09)
-              </NavLink>
-              <NavLink to="/catalogo" className={linkClass}>
-                Painel do Lojista (UC2)
-              </NavLink>
-            </>
-          )}
-          <NavLink to="/relatorios" className={linkClass}>
-            Relatórios Financeiros (RF10)
-          </NavLink>
-          {!isBd && (
-            <NavLink to="/painel-entregador" className={linkClass}>
-              Painel do entregador
-            </NavLink>
-          )}
-          {!isBd && (
-            <NavLink to="/perfis" className={linkClass}>
-              Perfis (RF01)
-            </NavLink>
-          )}
-        </nav>
-
-        <div className="w-full min-w-0 max-w-full space-y-2 sm:w-auto">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <label htmlFor="seletor-usuario" className="text-xs font-semibold text-white/80">
-              Sessão (X-User-Id):
-            </label>
-            <select
-              id="seletor-usuario"
-              aria-describedby={errosUsuarios.length ? 'erros-sessao' : undefined}
-              disabled={carregandoUsuarios || usuarios.length === 0}
-              value={usuarioAtual?.idPessoa ?? ''}
-              title={usuarioAtual ? rotuloUsuario(usuarioAtual) : undefined}
-              onChange={(e) => selecionarUsuario(Number(e.target.value))}
-              className="w-full min-w-0 max-w-full truncate rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-medium text-white outline-none focus:border-brand-lime sm:w-auto sm:max-w-xs"
-            >
-              {usuarios.length === 0 && (
-                <option value="" className="bg-brand-dark text-white">
-                  {carregandoUsuarios ? 'Carregando contas…' : 'Nenhuma conta disponível'}
-                </option>
-              )}
-              {usuarios.map((u) => (
-                <option key={u.idPessoa} value={u.idPessoa} className="bg-brand-dark text-white">
-                  {rotuloUsuario(u)}
-                </option>
-              ))}
-            </select>
-            {!isBd && usuarioAtual && (
-              <Link
-                to={`/perfis/${usuarioAtual.idPessoa}`}
-                className="rounded-full border border-white/30 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/10"
-              >
-                Meu perfil
-              </Link>
+            {usuarioAtual && papelAtivo && (
+              <p className="text-xs text-white/75">
+                Visão: <span className="font-semibold text-brand-lime">{ROTULO_PAPEL[papelAtivo]}</span>
+              </p>
             )}
           </div>
-          {errosUsuarios.length > 0 && (
-            <div id="erros-sessao" role="alert" className="max-w-sm space-y-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2 wrap-anywhere text-xs">
-              {errosUsuarios.map((erro) => <p key={erro}>{erro}</p>)}
+        </Link>
+
+        {usuarioAtual && papelAtivo ? (
+          <>
+            <nav className="flex flex-wrap items-center gap-2" aria-label="Navegação principal">
+              {papelAtivo === 'cliente' && (
+                <>
+                  <NavLink to="/" end className={linkClass}>
+                    Lojas
+                  </NavLink>
+                  <NavLink to="/pedidos" className={linkClass}>
+                    Meus pedidos
+                  </NavLink>
+                </>
+              )}
+
+              {papelAtivo === 'entregador' && (
+                <>
+                  <NavLink to="/painel-entregador" className={linkClass}>
+                    Entregas
+                  </NavLink>
+                  <NavLink to="/auditoria/sla" className={linkClass}>
+                    Meu SLA
+                  </NavLink>
+                </>
+              )}
+
+              {papelAtivo === 'lojista' && (
+                <>
+                  <NavLink to="/catalogo" className={linkClass}>
+                    Minha loja
+                  </NavLink>
+                  <NavLink to="/pedidos" className={linkClass}>
+                    Pedidos
+                  </NavLink>
+                  <NavLink to="/relatorios" className={linkClass}>
+                    Relatórios
+                  </NavLink>
+                  <NavLink to="/auditoria/sla" className={linkClass}>
+                    SLA Entregas
+                  </NavLink>
+                </>
+              )}
+
+              {papelAtivo === 'admin' && (
+                <>
+                  <NavLink to="/relatorios" className={linkClass}>
+                    Financeiro
+                  </NavLink>
+                  <NavLink to="/auditoria" end className={linkClass}>
+                    Auditoria
+                  </NavLink>
+                  <NavLink to="/auditoria/sla" className={linkClass}>
+                    SLA Entregas
+                  </NavLink>
+                  <NavLink to="/perfis" className={linkClass}>
+                    Perfis
+                  </NavLink>
+                </>
+              )}
+
+              <NavLink to={`/perfis/${usuarioAtual.idPessoa}`} className={linkClass}>
+                Meu perfil
+              </NavLink>
+            </nav>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {papeisDisponiveis.length > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <label htmlFor="seletor-papel" className="text-xs font-semibold text-white/80">
+                    Papel:
+                  </label>
+                  <select
+                    id="seletor-papel"
+                    value={papelAtivo}
+                    onChange={(e) => handleTrocarPapel(e.target.value as PapelAtivo)}
+                    className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white outline-none focus:border-brand-lime"
+                  >
+                    {papeisDisponiveis.map((p) => (
+                      <option key={p} value={p} className="bg-brand-dark text-white">
+                        {ROTULO_PAPEL[p]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-xs font-medium text-white">
+                {papelAtivo === 'cliente' && <User className="h-3.5 w-3.5 text-brand-lime" aria-hidden="true" />}
+                {papelAtivo === 'lojista' && <Store className="h-3.5 w-3.5 text-brand-lime" aria-hidden="true" />}
+                {papelAtivo === 'entregador' && <Truck className="h-3.5 w-3.5 text-brand-lime" aria-hidden="true" />}
+                {papelAtivo === 'admin' && <ShieldCheck className="h-3.5 w-3.5 text-brand-lime" aria-hidden="true" />}
+                <span className="max-w-44 truncate">{usuarioAtual.nome}</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={handleSair}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/25 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+                Sair
+              </button>
             </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <nav className="flex items-center gap-2" aria-label="Acesso">
+            <NavLink to="/entrar" className={linkClass}>
+              Entrar
+            </NavLink>
+            <NavLink to="/cadastro" className={linkClass}>
+              Criar conta
+            </NavLink>
+          </nav>
+        )}
       </div>
     </header>
   )

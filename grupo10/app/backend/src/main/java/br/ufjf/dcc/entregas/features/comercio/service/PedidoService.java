@@ -8,6 +8,7 @@ import br.ufjf.dcc.entregas.core.exception.AcessoNegadoException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
+import br.ufjf.dcc.entregas.core.security.AdminAccessService;
 import br.ufjf.dcc.entregas.features.comercio.dto.CriarPedidoRequest;
 import br.ufjf.dcc.entregas.features.comercio.dto.ItemPedidoRequest;
 import br.ufjf.dcc.entregas.features.comercio.dto.ItemPedidoResponse;
@@ -36,13 +37,16 @@ import java.util.Set;
 public class PedidoService {
 
     private final PedidoRepository pedidoRepository;
+    private final AdminAccessService adminAccessService;
     private final BigDecimal taxaServicoFixa;
 
     public PedidoService(
             PedidoRepository pedidoRepository,
+            AdminAccessService adminAccessService,
             @Value("${app.financeiro.taxa-servico-fixa:2.50}") BigDecimal taxaServicoFixa
     ) {
         this.pedidoRepository = pedidoRepository;
+        this.adminAccessService = adminAccessService;
         this.taxaServicoFixa = taxaServicoFixa;
     }
 
@@ -64,11 +68,11 @@ public class PedidoService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Loja " + requisicao.idLoja() + " não encontrada."));
 
         if (loja.getStatusFuncionamento() != StatusFuncionamento.aberta) {
-            throw new RegraNegocioException("[RN01/RR04] A loja '" + loja.getNome() + "' está fechada e não pode receber novos pedidos.");
+            throw new RegraNegocioException("A loja '" + loja.getNome() + "' está fechada no momento.");
         }
 
         var enderecoCliente = pedidoRepository.buscarEnderecoDoCliente(idCliente, requisicao.idEndereco())
-                .orElseThrow(() -> new RegraNegocioException("[RR03] O endereço informado não está vinculado ao cliente."));
+                .orElseThrow(() -> new RegraNegocioException("O endereço informado não está vinculado à sua conta."));
 
         Set<Long> idsProdutos = new HashSet<>();
         for (ItemPedidoRequest itemRequisicao : requisicao.itens()) {
@@ -88,11 +92,11 @@ public class PedidoService {
             }
 
             if (!produto.getIdLoja().equals(requisicao.idLoja())) {
-                throw new RegraNegocioException("[RN07] Todos os itens do pedido devem pertencer à mesma loja.");
+                throw new RegraNegocioException("Todos os itens do pedido devem pertencer à mesma loja.");
             }
 
             if (!Boolean.TRUE.equals(produto.getAtivo())) {
-                throw new RegraNegocioException("[RN01/RR04] O produto '" + produto.getNome() + "' está inativo para novos pedidos.");
+                throw new RegraNegocioException("O produto '" + produto.getNome() + "' está indisponível no momento.");
             }
 
             BigDecimal precoUnitario = produto.getPreco().setScale(2, RoundingMode.HALF_UP);
@@ -149,17 +153,18 @@ public class PedidoService {
 
         int atualizados = pedidoRepository.atualizarStatus(idPedido, pedido.status(), statusDestino);
         if (atualizados == 0) {
-            throw new RegraNegocioException("[RR06] O status do pedido foi alterado concorrentemente. Tente novamente.");
+            throw new RegraNegocioException("O status do pedido foi alterado por outra operação. Atualize e tente novamente.");
         }
 
         return buscarPorId(idUsuarioAutenticado, idPedido);
     }
 
     public PedidoResponse buscarPorId(Long idUsuarioAutenticado, Long idPedido) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
         PedidoDetalhadoRow pedido = pedidoRepository.buscarDetalhesPedido(idPedido)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pedido " + idPedido + " não encontrado."));
 
-        if (idUsuarioAutenticado != null) {
+        if (!adminAccessService.isAdmin(idUsuarioAutenticado)) {
             validarAcessoLeituraPedido(idUsuarioAutenticado, pedido);
         }
 
@@ -177,6 +182,8 @@ public class PedidoService {
             OffsetDateTime dataFim,
             int limit
     ) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+
         if (dataInicio != null && dataFim != null && dataInicio.isAfter(dataFim)) {
             throw new RequisicaoInvalidaException("A data inicial não pode ser posterior à data final.");
         }
@@ -189,7 +196,8 @@ public class PedidoService {
             }
         }
 
-        if (idUsuarioAutenticado != null) {
+        boolean ehAdmin = adminAccessService.isAdmin(idUsuarioAutenticado);
+        if (!ehAdmin) {
             if (idCliente != null && !idCliente.equals(idUsuarioAutenticado)) {
                 throw new AcessoNegadoException("Acesso negado: não é permitido consultar pedidos de outro cliente.");
             }
@@ -202,8 +210,9 @@ public class PedidoService {
             }
         }
 
+        Long filtroUsuario = ehAdmin ? null : idUsuarioAutenticado;
         List<PedidoDetalhadoRow> rows = pedidoRepository.listarPedidos(
-                idLoja, idCliente, idUsuarioAutenticado, status, dataInicio, dataFim, limit
+                idLoja, idCliente, filtroUsuario, status, dataInicio, dataFim, limit
         );
         if (rows.isEmpty()) {
             return List.of();
@@ -244,9 +253,9 @@ public class PedidoService {
                 }
             }
             case concluido -> throw new RegraNegocioException(
-                    "A conclusão do pedido ('concluido') ocorre automaticamente quando a entrega é finalizada pelo subdomínio de Logística."
+                    "O pedido é concluído automaticamente quando a entrega é finalizada."
             );
-            case solicitado -> throw new RegraNegocioException("[RR06] Não é permitido retornar o pedido para 'solicitado'.");
+            case solicitado -> throw new RegraNegocioException("Não é permitido retornar o pedido para o status inicial.");
         }
     }
 
@@ -261,7 +270,7 @@ public class PedidoService {
 
         if (!valida) {
             throw new RegraNegocioException(
-                    "[RR06] Transição de status inválida: " + statusAtual.getLiteral() + " -> " + statusDestino.getLiteral()
+                    "Esta alteração de status do pedido não é permitida no momento."
             );
         }
     }

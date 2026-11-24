@@ -40,9 +40,10 @@ public class IdentidadeController {
 
     @GetMapping
     public List<PessoaResumoResponse> listar(
+            @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
             @RequestParam(required = false) @Size(max = 120) String busca
     ) {
-        return perfilService.listarPessoas(busca);
+        return perfilService.listarPessoas(idUsuarioAutenticado, busca);
     }
 
     @GetMapping("/{idPessoa}")

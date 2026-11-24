@@ -11,6 +11,8 @@ public record UsuarioSessaoResponse(
         String email,
         boolean perfilCliente,
         boolean perfilLojista,
+        boolean perfilEntregador,
+        boolean administrador,
         Long idLoja,
         String nomeLoja
 ) {

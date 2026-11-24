@@ -24,3 +24,11 @@ app:
     taxa-servico-fixa: 2.50
     # Percentual retido pela plataforma sobre o subtotal da loja no split (15% -> loja recebe 85% - RF09/RN05)
     percentual-retencao-subtotal: 0.15
+  security:
+    # IDs de pessoas com permissão administrativa (final das matrículas dos integrantes)
+    admin-user-ids:
+      - 7   # João Vitor Almeida Queiroz (202435007)
+      - 15  # Arthur de Souza Marques (202435015)
+      - 19  # Gustavo Bersan Moreira Campos (202435019)
+      - 23  # Murilo Lacerda Dutra (202435023)
+      - 37  # Theo Carvalho de Faria (202435037)

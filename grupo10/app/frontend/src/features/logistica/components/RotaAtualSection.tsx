@@ -5,6 +5,7 @@
  */
 import { Link } from 'react-router-dom'
 import { formatarDataHora, formatarIdPedido } from '@/features/comercio/components/StatusBadge'
+import { formatarCodigoRota, limparNomeLoja } from '@/lib/apresentacao'
 import type { AcaoEntrega } from '../hooks/usePainelEntregador'
 import type { EntregaDaRota, RotaAtual } from '../types/logistica.types'
 import { botaoPrimarioClass, linkRastreioClass, secaoPainelClass, statusEntregaInfo } from './painel.styles'
@@ -41,12 +42,12 @@ function EntregaCard({
     <li className="min-w-0 space-y-4 rounded-2xl border border-surface-bg p-4 sm:p-5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
-          <h4 className="text-xl">Pedido {pedido}</h4>
-          <p className="wrap-break-word text-sm">{entrega.nomeLoja}</p>
+          <h4 className="text-xl">{pedido}</h4>
+          <p className="wrap-break-word text-sm">{limparNomeLoja(entrega.nomeLoja)}</p>
           <Link
             to={`/rastreio/${entrega.idPedido}`}
             state={{ origemRastreio: 'painel-entregador' }}
-            aria-label={`Ver rastreio do pedido ${pedido}`}
+            aria-label={`Ver rastreio de ${pedido}`}
             className={linkRastreioClass}
           >
             Ver rastreio
@@ -111,7 +112,7 @@ export function RotaAtualSection({ rota, ...controles }: ControlesEntrega & { ro
         <h3 id="logistica-rota-atual" className="text-2xl">Rota atual</h3>
         {rota && (
           <p className="text-sm">
-            Rota #{String(rota.idRota).padStart(6, '0')} · Aberta em{' '}
+            {formatarCodigoRota(rota.idRota)} · Aberta em{' '}
             <time dateTime={rota.criadaEm}>{formatarDataHora(rota.criadaEm)}</time>
             {' · '}{rota.totalEntregas} de 2 entregas vinculadas
           </p>
@@ -143,9 +144,8 @@ export function RotaAtualSection({ rota, ...controles }: ControlesEntrega & { ro
           Você não tem uma rota aberta. Assuma uma entrega da fila para abrir uma rota.
         </p>
       )}
-      <p className="border-t border-surface-bg pt-4 text-sm">
-        Você pode ter uma rota aberta por vez, com até duas entregas no total. As entregas já
-        concluídas continuam ocupando vaga até a rota fechar, ao finalizar a última entrega ativa.
+      <p className="border-t border-surface-bg pt-4 text-xs text-text-default">
+        Limite de 2 entregas por rota até a finalização das entregas ativas.
       </p>
     </section>
   )

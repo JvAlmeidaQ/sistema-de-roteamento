@@ -192,9 +192,9 @@ class ComercioFinancasIntegrationTest {
                 .andExpect(jsonPath("$.status").value("pronto"))
                 .andExpect(jsonPath("$.statusEntrega").value("aguardando_entregador"));
 
-        // RN13/RR08: antes de concluir entrega, split e avaliações falham com 422
+        // RN13/RR08: antes de concluir entrega, split (pelo lojista) e avaliações falham com 422
         mockMvc.perform(post("/api/pedidos/{id}/divisao-pagamento", idPedido)
-                        .header("X-User-Id", idClienteA))
+                        .header("X-User-Id", lojaAberta.getIdLojista()))
                 .andExpect(status().isUnprocessableEntity());
 
         mockMvc.perform(post("/api/pedidos/{id}/avaliacoes/loja", idPedido)
@@ -397,8 +397,9 @@ class ComercioFinancasIntegrationTest {
 
     @Test
     void deveRegistrarSplitEAvaliacoesParaPedidoConcluidoEEntregue() throws Exception {
-        var pedidoEntregue = dsl.select(PEDIDO.ID_PEDIDO, PEDIDO.ID_CLIENTE, PEDIDO.TAXA_ENTREGA, PEDIDO.VALOR_TOTAL)
+        var pedidoEntregue = dsl.select(PEDIDO.ID_PEDIDO, PEDIDO.ID_CLIENTE, LOJA.ID_LOJISTA, PEDIDO.TAXA_ENTREGA, PEDIDO.VALOR_TOTAL)
                 .from(PEDIDO)
+                .join(LOJA).on(LOJA.ID_LOJA.eq(PEDIDO.ID_LOJA))
                 .join(ENTREGA).on(ENTREGA.ID_PEDIDO.eq(PEDIDO.ID_PEDIDO))
                 .where(PEDIDO.STATUS.eq(StatusPedido.concluido))
                 .and(ENTREGA.STATUS.eq(StatusEntrega.entregue))
@@ -410,15 +411,21 @@ class ComercioFinancasIntegrationTest {
 
         Long idPedido = pedidoEntregue.value1();
         Long idCliente = pedidoEntregue.value2();
-        BigDecimal taxaEntregaPedido = pedidoEntregue.value3();
-        BigDecimal valorTotalPedido = pedidoEntregue.value4();
+        Long idLojista = pedidoEntregue.value3();
+        BigDecimal taxaEntregaPedido = pedidoEntregue.value4();
+        BigDecimal valorTotalPedido = pedidoEntregue.value5();
 
         // Garante teste limpo de split removendo eventual split da carga na transação (revertido ao fim do @Test)
         dsl.deleteFrom(DIVISAO_PAGAMENTO).where(DIVISAO_PAGAMENTO.ID_PEDIDO.eq(idPedido)).execute();
 
-        // RF09/RN05: calcula e registra split (201 Created) e verifica soma exata
-        String splitBody = mockMvc.perform(post("/api/pedidos/{id}/divisao-pagamento", idPedido)
+        // Cliente não pode registrar split -> 403
+        mockMvc.perform(post("/api/pedidos/{id}/divisao-pagamento", idPedido)
                         .header("X-User-Id", idCliente))
+                .andExpect(status().isForbidden());
+
+        // RF09/RN05: lojista dono calcula e registra split (201 Created) e verifica soma exata
+        String splitBody = mockMvc.perform(post("/api/pedidos/{id}/divisao-pagamento", idPedido)
+                        .header("X-User-Id", idLojista))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         JsonNode splitJson = objectMapper.readTree(splitBody);
@@ -430,7 +437,7 @@ class ComercioFinancasIntegrationTest {
 
         // RF09 duplicidade -> 409 Conflict
         mockMvc.perform(post("/api/pedidos/{id}/divisao-pagamento", idPedido)
-                        .header("X-User-Id", idCliente))
+                        .header("X-User-Id", idLojista))
                 .andExpect(status().isConflict());
 
         // RF08: Avaliação de Loja e de Entregador (nota inválida -> 400, válida -> 201, duplicada -> 409)
@@ -469,41 +476,113 @@ class ComercioFinancasIntegrationTest {
 
     @Test
     void deveRetornarRelatoriosVisaoConsultasEEndpointsDeCheckout() throws Exception {
-        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro"))
+        Long idLojistaLoja1 = dsl.select(LOJA.ID_LOJISTA)
+                .from(LOJA)
+                .where(LOJA.ID_LOJA.eq(1L))
+                .fetchOneInto(Long.class);
+        assertThat(idLojistaLoja1).isNotNull();
+
+        Long idClienteComEndereco = dsl.select(CLIENTE.ID_PESSOA)
+                .from(CLIENTE)
+                .where(CLIENTE.ID_ENDERECO_ATUAL.isNotNull())
+                .and(CLIENTE.ID_PESSOA.ne(idLojistaLoja1))
+                .limit(1)
+                .fetchOneInto(Long.class);
+        assertThat(idClienteComEndereco).isNotNull();
+
+        // Exige X-User-Id nos endpoints protegidos
+        mockMvc.perform(get("/api/pedidos")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/pedidos/1")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/comercio/lojas/1/relatorio")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/comercio/consultas/5")).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/comercio/checkout/clientes/{id}/enderecos", idClienteComEndereco))
+                .andExpect(status().isForbidden());
+
+        // Cliente comum não pode consultar resumo financeiro nem consultas estratégicas -> 403
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro").header("X-User-Id", idClienteComEndereco))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/comercio/consultas/5").header("X-User-Id", idClienteComEndereco))
+                .andExpect(status().isForbidden());
+        // Terceiro não pode consultar endereços de outro cliente -> 403
+        mockMvc.perform(get("/api/comercio/checkout/clientes/{id}/enderecos", idClienteComEndereco)
+                        .header("X-User-Id", idLojistaLoja1))
+                .andExpect(status().isForbidden());
+
+        // Lojista vê apenas o resumo financeiro da própria loja e é bloqueado ao pedir outra loja
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro").header("X-User-Id", idLojistaLoja1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idLoja").value(1));
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro")
+                        .header("X-User-Id", idLojistaLoja1)
+                        .param("idLoja", "2"))
+                .andExpect(status().isForbidden());
+
+        // Admin (id=7) atuando como Lojista sem loja (X-Active-Role: lojista) recebe 403 em vez de dados globais
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro")
+                        .header("X-User-Id", 7L)
+                        .header("X-Active-Role", "lojista"))
+                .andExpect(status().isForbidden());
+        // Admin (id=7) atuando como Admin vê visão consolidada
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro")
+                        .header("X-User-Id", 7L)
+                        .header("X-Active-Role", "admin"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].idLoja").exists());
 
-        mockMvc.perform(get("/api/comercio/lojas/1/relatorio").param("status", "concluido"))
+        // Outro usuário não pode consultar relatório da loja 1 -> 403
+        mockMvc.perform(get("/api/comercio/lojas/1/relatorio")
+                        .header("X-User-Id", idClienteComEndereco)
+                        .param("status", "concluido"))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/comercio/lojas/1/relatorio")
+                        .header("X-User-Id", idLojistaLoja1)
+                        .param("status", "concluido"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idLoja").value(1));
 
         // dataInicio > dataFim -> 400
         mockMvc.perform(get("/api/comercio/lojas/1/relatorio")
+                        .header("X-User-Id", idLojistaLoja1)
                         .param("dataInicio", "2026-11-20T00:00:00Z")
                         .param("dataFim", "2026-11-01T00:00:00Z"))
                 .andExpect(status().isBadRequest());
 
+        // Lojista pode executar consultas C5–C12 escopadas à própria loja
         for (int n = 5; n <= 12; n++) {
-            mockMvc.perform(get("/api/comercio/consultas/{numero}", n))
+            mockMvc.perform(get("/api/comercio/consultas/{numero}", n)
+                            .header("X-User-Id", idLojistaLoja1))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.numero").value(n));
         }
 
-        mockMvc.perform(get("/api/comercio/checkout/usuarios"))
+        // Garante que consulta 7/11 retorna apenas linhas da loja 1 (ou vazio)
+        String consulta11Body = mockMvc.perform(get("/api/comercio/consultas/11")
+                        .header("X-User-Id", idLojistaLoja1))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].idPessoa").exists());
+                .andReturn().getResponse().getContentAsString();
+        JsonNode linhas11 = objectMapper.readTree(consulta11Body).get("linhas");
+        for (JsonNode linha : linhas11) {
+            assertThat(linha.get("id_loja").asLong()).isEqualTo(1L);
+        }
+
+        String usuariosBody = mockMvc.perform(get("/api/comercio/checkout/usuarios"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idPessoa").exists())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode usuariosJson = objectMapper.readTree(usuariosBody);
+        for (JsonNode u : usuariosJson) {
+            assertThat(u.get("administrador").asBoolean()).isFalse();
+            assertThat(u.get("idPessoa").asLong()).isNotIn(7L, 15L, 19L, 23L, 37L);
+        }
 
         mockMvc.perform(get("/api/comercio/checkout/lojas"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].idLoja").exists());
 
-        Long idClienteComEndereco = dsl.select(CLIENTE.ID_PESSOA)
-                .from(CLIENTE)
-                .where(CLIENTE.ID_ENDERECO_ATUAL.isNotNull())
-                .limit(1)
-                .fetchOneInto(Long.class);
-
-        mockMvc.perform(get("/api/comercio/checkout/clientes/{id}/enderecos", idClienteComEndereco))
+        mockMvc.perform(get("/api/comercio/checkout/clientes/{id}/enderecos", idClienteComEndereco)
+                        .header("X-User-Id", idClienteComEndereco))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].idEndereco").exists());
     }
@@ -512,9 +591,11 @@ class ComercioFinancasIntegrationTest {
     void deveTraduzirSqlStatesParaStatusHttpCorretos() {
         var r23505 = exceptionHandler.handleDatabaseError(new SQLException("duplicate key", "23505"));
         assertThat(r23505.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(r23505.getBody().sqlState()).isNull();
 
         var r23503 = exceptionHandler.handleDatabaseError(new SQLException("fk violation", "23503"));
         assertThat(r23503.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+        assertThat(r23503.getBody().sqlState()).isNull();
 
         var r23514Regra = exceptionHandler.handleDatabaseError(new SQLException("RN09 check violation", "23514"));
         assertThat(r23514Regra.getStatusCode()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
@@ -523,5 +604,6 @@ class ComercioFinancasIntegrationTest {
                 new SQLException("RR12: logradouro, número e CEP não podem ser alterados", "23514")
         );
         assertThat(r23514Imutavel.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(r23514Imutavel.getBody().message()).doesNotContain("RR12");
     }
 }

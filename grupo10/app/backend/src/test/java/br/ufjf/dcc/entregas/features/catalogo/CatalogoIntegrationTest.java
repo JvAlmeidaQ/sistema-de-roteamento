@@ -248,7 +248,7 @@ class CatalogoIntegrationTest {
         mockMvc.perform(delete("/api/catalogo/lojas/{idLoja}/categorias/{idCategoria}", idLoja, idCatExclusiva)
                         .header("X-User-Id", idDono))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("RR18")));
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("Reclassifique-os")));
     }
 
     @Test

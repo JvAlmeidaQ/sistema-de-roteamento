@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -42,8 +43,9 @@ public class CheckoutConsultaController {
 
     @GetMapping("/clientes/{idCliente}/enderecos")
     public List<EnderecoEntregaClienteResponse> listarEnderecosEntregaCliente(
+            @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
             @PathVariable @Positive Long idCliente
     ) {
-        return checkoutConsultaService.listarEnderecosEntregaCliente(idCliente);
+        return checkoutConsultaService.listarEnderecosEntregaCliente(idUsuarioAutenticado, idCliente);
     }
 }

@@ -187,7 +187,7 @@ class LogisticaIntegrationTest {
                 .andExpect(jsonPath("$.rotaAtual.entregasAtivas").value(1))
                 .andExpect(jsonPath("$.rotaAtual.vagas").value(0));
         assumir(idEntregador, terceira.idEntrega()).andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message", containsString("RN02")));
+                .andExpect(jsonPath("$.message", containsString("limite de 2 entregas")));
 
         concluirEntrega(idEntregador, segunda.idEntrega());
         assumir(idEntregador, terceira.idEntrega()).andExpect(status().isNoContent());
@@ -211,7 +211,7 @@ class LogisticaIntegrationTest {
                 .andExpect(jsonPath("$.rotaAtual.entregasAtrasadas").value(1))
                 .andExpect(jsonPath("$.rotaAtual.entregas[0].atrasada").value(true));
         assumir(idEntregador, outra.idEntrega()).andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message", containsString("RN03")));
+                .andExpect(jsonPath("$.message", containsString("atraso")));
 
         concluirEntrega(idEntregador, vencida.idEntrega());
         assumir(idEntregador, outra.idEntrega()).andExpect(status().isNoContent());

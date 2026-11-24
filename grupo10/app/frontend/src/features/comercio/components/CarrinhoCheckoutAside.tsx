@@ -2,7 +2,9 @@
  * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
  * Subdomínio: Comércio e Finanças (disponível em VITE_APP_MODE=bd e full)
  */
+import { Minus, Plus } from 'lucide-react'
 import type { UseFormReturn } from 'react-hook-form'
+import { limparNomeProduto } from '@/lib/apresentacao'
 import type { CriarPedidoFormValues } from '../schemas/comercio.schemas'
 import type { EnderecoEntregaCliente, ProdutoCheckout } from '../types/comercio.types'
 import { formatarMoeda } from './StatusBadge'
@@ -52,8 +54,7 @@ export function CarrinhoCheckoutAside({
             aria-live="polite"
             className="rounded-2xl border border-state-pending/50 bg-state-pending/15 px-3 py-2 text-xs font-medium text-brand-pit"
           >
-            Loja fechada no momento: enviar este pedido demonstrará o bloqueio [RN01/RR04] (HTTP
-            422).
+            Esta loja está fechada no momento e não aceita novos pedidos.
           </div>
         )}
 
@@ -69,7 +70,9 @@ export function CarrinhoCheckoutAside({
                 className="flex items-center justify-between gap-2 py-2.5 text-sm"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-brand-dark">{item.produto.nome}</p>
+                  <p className="truncate font-semibold text-brand-dark">
+                    {limparNomeProduto(item.produto.nome)}
+                  </p>
                   <p className="text-xs text-text-default">
                     {formatarMoeda(item.produto.preco)} un.
                   </p>
@@ -77,22 +80,22 @@ export function CarrinhoCheckoutAside({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    aria-label={`Diminuir quantidade de ${item.produto.nome}`}
+                    aria-label={`Diminuir quantidade de ${limparNomeProduto(item.produto.nome)}`}
                     onClick={() => onAlterarQuantidade(item.produto.idProduto, -1)}
-                    className="h-8 w-8 rounded-full border border-surface-bg font-semibold text-brand-dark hover:bg-surface-bg"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-surface-bg font-semibold text-brand-dark hover:bg-surface-bg"
                   >
-                    -
+                    <Minus className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                   <span className="w-5 text-center font-semibold text-brand-dark">
                     {item.quantidade}
                   </span>
                   <button
                     type="button"
-                    aria-label={`Aumentar quantidade de ${item.produto.nome}`}
+                    aria-label={`Aumentar quantidade de ${limparNomeProduto(item.produto.nome)}`}
                     onClick={() => onAlterarQuantidade(item.produto.idProduto, 1)}
-                    className="h-8 w-8 rounded-full border border-surface-bg font-semibold text-brand-dark hover:bg-surface-bg"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-surface-bg font-semibold text-brand-dark hover:bg-surface-bg"
                   >
-                    +
+                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                   </button>
                 </div>
               </li>
@@ -105,7 +108,7 @@ export function CarrinhoCheckoutAside({
 
         <div>
           <label htmlFor="select-endereco" className="block text-xs font-semibold text-brand-dark">
-            Endereço de Entrega (RR03)
+            Endereço de entrega
           </label>
           <select
             id="select-endereco"
@@ -170,25 +173,25 @@ export function CarrinhoCheckoutAside({
               <span className="font-semibold text-brand-dark">{formatarMoeda(subtotal)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Taxa de Entrega (Snapshot Loja)</span>
+              <span>Taxa de entrega</span>
               <span className="font-semibold text-brand-dark">{formatarMoeda(taxaEntrega)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Taxa de Serviço (Plataforma)</span>
+              <span>Taxa de serviço</span>
               <span className="font-semibold text-brand-dark">{formatarMoeda(taxaServico)}</span>
             </div>
-            <div className="flex justify-between border-t border-surface-bg pt-2 text-sm font-bold text-brand-dark">
-              <span>Total (RR10)</span>
+            <div className="flex justify-between border-t border-surface-bg pt-2 text-sm font-semibold text-brand-dark">
+              <span>Total</span>
               <span>{formatarMoeda(valorTotal)}</span>
             </div>
           </div>
 
           <button
             type="submit"
-            disabled={enviando}
-            className="w-full rounded-full bg-brand-lime px-5 py-3 text-sm font-semibold text-brand-dark transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={enviando || lojaFechada}
+            className="min-h-11 w-full rounded-full bg-brand-lime px-5 py-3 text-sm font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {enviando ? 'Enviando Pedido...' : 'Confirmar Pedido'}
+            {enviando ? 'Enviando pedido...' : 'Confirmar pedido'}
           </button>
         </div>
       </form>

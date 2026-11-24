@@ -3,6 +3,7 @@
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Catálogo
  */
+import { Check, Plus, X } from 'lucide-react'
 import { useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -99,23 +100,23 @@ export function FormProdutoModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/40 p-4 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
       aria-labelledby="modal-produto-titulo"
     >
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface p-6 shadow-hover transition-all">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-surface-bg bg-surface p-6 shadow-hover transition-all">
         <div className="flex items-center justify-between border-b border-surface-bg pb-3">
           <h3 id="modal-produto-titulo" className="font-display text-lg font-semibold text-brand-dark">
-            {isEdicao ? 'Editar Produto do Catálogo' : 'Novo Produto do Catálogo'}
+            {isEdicao ? 'Editar produto' : 'Novo produto'}
           </h3>
           <button
             type="button"
             onClick={onFechar}
             aria-label="Fechar modal"
-            className="rounded-full p-1 text-text-default hover:bg-surface-bg hover:text-brand-dark"
+            className="rounded-full p-1.5 text-text-default hover:bg-surface-bg hover:text-brand-dark"
           >
-            ✕
+            <X className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
 
@@ -154,7 +155,7 @@ export function FormProdutoModal({
 
           <div>
             <label htmlFor="prod-preco" className="block text-xs font-semibold text-brand-dark">
-              Preço Unitário (R$) * — <span className="text-[11px] font-normal text-text-default">RN09: maior que zero</span>
+              Preço unitário (R$) *
             </label>
             <input
               id="prod-preco"
@@ -172,7 +173,7 @@ export function FormProdutoModal({
 
           <div>
             <label className="block text-xs font-semibold text-brand-dark">
-              Categorias * — <span className="text-[11px] font-normal text-text-default">RR18: selecione ao menos uma</span>
+              Categorias * <span className="text-[11px] font-normal text-text-default">(selecione ao menos uma)</span>
             </label>
             {categoriasDisponiveis.length === 0 ? (
               <p className="mt-1 rounded-xl bg-state-pending/10 p-2 text-xs text-brand-pit">
@@ -188,13 +189,13 @@ export function FormProdutoModal({
                       type="button"
                       aria-pressed={ativa}
                       onClick={() => toggleCategoria(cat.idCategoria)}
-                      className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all ${
                         ativa
-                          ? 'bg-brand-lime text-brand-dark border border-brand-green/40 shadow-xs'
-                          : 'bg-surface-bg/70 text-text-default hover:bg-surface-bg border border-transparent'
+                          ? 'border border-brand-green/40 bg-brand-lime text-brand-dark'
+                          : 'border border-transparent bg-surface-bg/70 text-text-default hover:bg-surface-bg'
                       }`}
                     >
-                      {ativa ? '✓ ' : '+ '}
+                      {ativa ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Plus className="h-3.5 w-3.5" aria-hidden="true" />}
                       {cat.nome}
                     </button>
                   )

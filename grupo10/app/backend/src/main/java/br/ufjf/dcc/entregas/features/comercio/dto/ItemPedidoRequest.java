@@ -13,7 +13,7 @@ public record ItemPedidoRequest(
         Long idProduto,
 
         @NotNull(message = "A quantidade é obrigatória.")
-        @Positive(message = "RN09/RR13: A quantidade do item deve ser maior que zero.")
+        @Positive(message = "A quantidade do item deve ser maior que zero.")
         Integer quantidade
 ) {
 }

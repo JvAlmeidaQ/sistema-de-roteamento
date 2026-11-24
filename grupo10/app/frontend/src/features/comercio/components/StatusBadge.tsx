@@ -2,6 +2,12 @@
  * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
  * Subdomínio: Comércio e Finanças
  */
+import {
+  formatarCodigoPedido,
+  formatarFormaPagamento,
+  formatarStatusPedido,
+  limparNomeLoja,
+} from '@/lib/apresentacao'
 import type { StatusPedido } from '../types/comercio.types'
 
 const STATUS_CONFIG: Record<StatusPedido, { label: string; classes: string }> = {
@@ -10,7 +16,7 @@ const STATUS_CONFIG: Record<StatusPedido, { label: string; classes: string }> = 
     classes: 'bg-state-pending/15 text-brand-pit border-state-pending/40',
   },
   aceito: {
-    label: 'Aceito (Aguard. Pagto)',
+    label: 'Aceito',
     classes: 'bg-state-pending/15 text-brand-pit border-state-pending/40',
   },
   pago: {
@@ -18,11 +24,11 @@ const STATUS_CONFIG: Record<StatusPedido, { label: string; classes: string }> = 
     classes: 'bg-state-progress/15 text-brand-dark border-state-progress/40',
   },
   em_preparacao: {
-    label: 'Em Preparação',
+    label: 'Em preparação',
     classes: 'bg-state-progress/15 text-brand-dark border-state-progress/40',
   },
   pronto: {
-    label: 'Pronto p/ Entrega',
+    label: 'Pronto para entrega',
     classes: 'bg-brand-pulp/20 text-brand-dark border-brand-pulp/50',
   },
   concluido: {
@@ -76,14 +82,23 @@ export function formatarDataHora(iso: string | null | undefined): string {
 }
 
 export function formatarIdPedido(id: number): string {
-  return `#${String(id).padStart(6, '0')}`
+  return formatarCodigoPedido(id)
 }
 
 export function formatarCelulaConsulta(coluna: string, valor: unknown): string {
   if (valor == null) return '—'
   const col = coluna.toLowerCase()
   if (col === 'id_pedido' && typeof valor === 'number') {
-    return formatarIdPedido(valor)
+    return formatarCodigoPedido(valor)
+  }
+  if (col === 'forma_pagamento' && typeof valor === 'string') {
+    return formatarFormaPagamento(valor)
+  }
+  if (col === 'status' && typeof valor === 'string') {
+    return formatarStatusPedido(valor)
+  }
+  if (col === 'nome' && typeof valor === 'string') {
+    return limparNomeLoja(valor)
   }
   if (
     typeof valor === 'number' &&

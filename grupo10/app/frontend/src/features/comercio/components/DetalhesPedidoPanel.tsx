@@ -1,9 +1,17 @@
 /**
  * Disciplina: DCC061 (Engenharia de Software)
- * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Comércio e Finanças
  */
+import { MapPin } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { StarRating } from '@/components/StarRating'
+import type { PapelAtivo } from '@/context/SessaoUsuarioContext'
+import {
+  formatarFormaPagamento,
+  formatarStatusEntrega,
+  limparNomeLoja,
+  limparNomeProduto,
+} from '@/lib/apresentacao'
 import type { AvaliacaoFormValues } from '../schemas/comercio.schemas'
 import type { PedidoResponse } from '../types/comercio.types'
 import { AvaliacaoPedidoForm } from './AvaliacaoPedidoForm'
@@ -11,6 +19,7 @@ import { StatusBadge, formatarDataHora, formatarIdPedido, formatarMoeda } from '
 
 interface DetalhesPedidoPanelProps {
   pedido: PedidoResponse | null
+  papelAtivo: PapelAtivo | null
   onTransicionar: (idPedido: number, novoStatus: string) => void
   onCalcularSplit: (idPedido: number) => void
   onEnviarAvaliacao: (
@@ -22,6 +31,7 @@ interface DetalhesPedidoPanelProps {
 
 export function DetalhesPedidoPanel({
   pedido,
+  papelAtivo,
   onTransicionar,
   onCalcularSplit,
   onEnviarAvaliacao,
@@ -30,12 +40,14 @@ export function DetalhesPedidoPanel({
     return (
       <aside className="rounded-2xl border border-surface-bg bg-surface p-6">
         <p className="text-sm text-text-default">
-          Selecione um pedido na tabela ao lado para acompanhar detalhes, avançar status, calcular
-          o split financeiro ou avaliar.
+          Selecione um pedido ao lado para acompanhar os detalhes e realizar ações disponíveis.
         </p>
       </aside>
     )
   }
+
+  const ehLojista = papelAtivo === 'lojista'
+  const ehCliente = papelAtivo === 'cliente'
 
   return (
     <aside className="space-y-4 rounded-2xl border border-surface-bg bg-surface p-6">
@@ -45,7 +57,7 @@ export function DetalhesPedidoPanel({
             {formatarIdPedido(pedido.idPedido)}
           </h3>
           <p className="text-xs text-text-default">
-            {formatarDataHora(pedido.dataPedido)} · {pedido.formaPagamento}
+            {formatarDataHora(pedido.dataPedido)} · {formatarFormaPagamento(pedido.formaPagamento)}
           </p>
         </div>
         <StatusBadge status={pedido.status} />
@@ -53,14 +65,15 @@ export function DetalhesPedidoPanel({
 
       <Link
         to={`/rastreio/${pedido.idPedido}`}
-        className="inline-flex min-h-11 items-center rounded-sm text-sm font-semibold text-brand-dark underline underline-offset-4 hover:text-brand-outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-outline"
+        className="inline-flex min-h-11 items-center gap-1.5 rounded-sm text-sm font-semibold text-brand-outline underline underline-offset-4 hover:text-brand-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-outline"
       >
-        Ver rastreio
+        <MapPin className="h-4 w-4" aria-hidden="true" />
+        Acompanhar entrega
       </Link>
 
       <div className="space-y-1 rounded-2xl bg-surface-bg/50 p-3 text-xs">
         <p>
-          <strong>Loja:</strong> {pedido.nomeLoja}
+          <strong>Loja:</strong> {limparNomeLoja(pedido.nomeLoja)}
         </p>
         <p>
           <strong>Cliente:</strong> {pedido.nomeCliente}
@@ -70,7 +83,7 @@ export function DetalhesPedidoPanel({
         </p>
         {pedido.statusEntrega && (
           <p>
-            <strong>Entrega (Logística):</strong> {pedido.statusEntrega}
+            <strong>Entrega:</strong> {formatarStatusEntrega(pedido.statusEntrega)}
           </p>
         )}
       </div>
@@ -81,7 +94,7 @@ export function DetalhesPedidoPanel({
           {pedido.itens.map((item) => (
             <li key={item.idProduto} className="flex justify-between py-1.5">
               <span>
-                {item.quantidade}x {item.nomeProduto}
+                {item.quantidade}x {limparNomeProduto(item.nomeProduto)}
               </span>
               <span className="font-semibold text-brand-dark">
                 {formatarMoeda(item.subtotalItem)}
@@ -91,136 +104,150 @@ export function DetalhesPedidoPanel({
         </ul>
       </div>
 
-      {/* Transições da máquina de estados (RF03 / RF06 / RR06) */}
+      {/* Ações operacionais filtradas pelo papel ativo */}
       <div className="flex flex-wrap gap-2 border-t border-surface-bg pt-3">
-        {pedido.status === 'solicitado' && (
+        {ehLojista && pedido.status === 'solicitado' && (
           <>
             <button
               type="button"
               onClick={() => onTransicionar(pedido.idPedido, 'aceito')}
-              className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark"
+              className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
             >
-              Aceitar Pedido (Lojista)
+              Aceitar pedido
             </button>
             <button
               type="button"
               onClick={() => onTransicionar(pedido.idPedido, 'recusado')}
-              className="rounded-full border border-state-error px-4 py-1.5 text-xs font-semibold text-state-error"
+              className="rounded-full border border-state-error px-4 py-1.5 text-xs font-semibold text-state-error transition-colors hover:bg-state-error/10"
             >
               Recusar
             </button>
           </>
         )}
 
-        {pedido.status === 'aceito' && (
+        {ehCliente && pedido.status === 'aceito' && (
           <button
             type="button"
             onClick={() => onTransicionar(pedido.idPedido, 'pago')}
-            className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark"
+            className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
           >
-            Confirmar Pagamento (Cliente)
+            Confirmar pagamento
           </button>
         )}
 
-        {pedido.status === 'pago' && (
+        {ehLojista && pedido.status === 'pago' && (
           <button
             type="button"
             onClick={() => onTransicionar(pedido.idPedido, 'em_preparacao')}
-            className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark"
+            className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
           >
-            Iniciar Preparo (Lojista)
+            Iniciar preparo
           </button>
         )}
 
-        {pedido.status === 'em_preparacao' && (
+        {ehLojista && pedido.status === 'em_preparacao' && (
           <button
             type="button"
             onClick={() => onTransicionar(pedido.idPedido, 'pronto')}
-            className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark"
+            className="rounded-full bg-brand-lime px-4 py-1.5 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
           >
-            Marcar como Pronto (Lojista)
+            Marcar como pronto
           </button>
         )}
 
         {pedido.status === 'pronto' && (
           <p className="text-xs text-text-default">
-            Entrega gerada (RN12). Aguardando conclusão pelo subdomínio de Logística para liberar
-            split financeiro e avaliações (RN13/RR08).
+            Pedido pronto e aguardando entrega.
           </p>
         )}
       </div>
 
-      {/* Divisão de Pagamento (RF09 / RN05) */}
-      <div className="space-y-2 border-t border-surface-bg pt-3">
-        <div className="flex items-center justify-between gap-2">
-          <h4 className="font-display text-sm font-semibold text-brand-dark">
-            Divisão Financeira (RF09 / RN05)
-          </h4>
-          {pedido.status !== 'concluido' && (
-            <span className="rounded-full bg-state-pending/15 px-2.5 py-0.5 text-[11px] font-semibold text-brand-pit">
-              Requer concluído (RN13)
-            </span>
+      {/* Divisão financeira exclusiva para visão do Lojista */}
+      {ehLojista && (
+        <div className="space-y-2 border-t border-surface-bg pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="font-display text-sm font-semibold text-brand-dark">
+              Repasse financeiro
+            </h4>
+            {pedido.status !== 'concluido' && (
+              <span className="rounded-full bg-state-pending/15 px-2.5 py-0.5 text-[11px] font-semibold text-brand-pit">
+                Disponível após conclusão
+              </span>
+            )}
+          </div>
+
+          {pedido.divisaoPagamento ? (
+            <div className="space-y-1 rounded-2xl bg-state-success/10 p-3 text-xs">
+              <div className="flex justify-between">
+                <span>Repasse da loja</span>
+                <strong>{formatarMoeda(pedido.divisaoPagamento.parcelaLoja)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Comissão do entregador</span>
+                <strong>{formatarMoeda(pedido.divisaoPagamento.comissaoEntregador)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span>Taxa da plataforma</span>
+                <strong>{formatarMoeda(pedido.divisaoPagamento.taxaPlataforma)}</strong>
+              </div>
+              <div className="flex justify-between border-t border-state-success/25 pt-1 text-brand-dark">
+                <span>Total</span>
+                <strong>{formatarMoeda(pedido.divisaoPagamento.valorTotal)}</strong>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={pedido.status !== 'concluido'}
+              onClick={() => onCalcularSplit(pedido.idPedido)}
+              className="w-full rounded-full border border-brand-dark px-4 py-2 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Calcular repasse
+            </button>
           )}
         </div>
+      )}
 
-        {pedido.divisaoPagamento ? (
-          <div className="space-y-1 rounded-2xl bg-state-success/10 p-3 text-xs">
-            <div className="flex justify-between">
-              <span>Parcela Loja (85% subtotal)</span>
-              <strong>{formatarMoeda(pedido.divisaoPagamento.parcelaLoja)}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span>Comissão Entregador (frete)</span>
-              <strong>{formatarMoeda(pedido.divisaoPagamento.comissaoEntregador)}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span>Taxa Plataforma</span>
-              <strong>{formatarMoeda(pedido.divisaoPagamento.taxaPlataforma)}</strong>
-            </div>
-            <div className="flex justify-between border-t border-state-success/25 pt-1 text-brand-dark">
-              <span>Total Split (RN05)</span>
-              <strong>{formatarMoeda(pedido.divisaoPagamento.valorTotal)}</strong>
-            </div>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={() => onCalcularSplit(pedido.idPedido)}
-            className="w-full rounded-full border border-brand-dark px-4 py-2 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime"
-          >
-            Calcular & Registrar Split (RF09)
-          </button>
-        )}
-      </div>
+      {/* Avaliações pós-entrega */}
+      {(ehCliente || pedido.avaliacaoLoja || pedido.avaliacaoEntregador) && (
+        <div className="space-y-3 border-t border-surface-bg pt-3">
+          <h4 className="font-display text-sm font-semibold text-brand-dark">
+            Avaliações
+          </h4>
 
-      {/* Avaliações Pós-Entrega (RF08 / RN06 / RN13) */}
-      <div className="space-y-3 border-t border-surface-bg pt-3">
-        <h4 className="font-display text-sm font-semibold text-brand-dark">
-          Avaliações Pós-Entrega (RF08 / RN06 / RN13)
-        </h4>
+          {pedido.avaliacaoLoja ? (
+            <div className="space-y-1 rounded-2xl bg-surface-bg/50 p-3 text-xs">
+              <div className="flex items-center justify-between">
+                <strong>Loja</strong>
+                <StarRating nota={pedido.avaliacaoLoja.nota} rotulo="Avaliação da loja" />
+              </div>
+              <p className="text-text-default">
+                {pedido.avaliacaoLoja.comentario ?? 'Sem comentário'}
+              </p>
+            </div>
+          ) : ehCliente && pedido.status === 'concluido' ? (
+            <AvaliacaoPedidoForm alvo="loja" idPedido={pedido.idPedido} onEnviar={onEnviarAvaliacao} />
+          ) : null}
 
-        {pedido.avaliacaoLoja ? (
-          <div className="rounded-2xl bg-surface-bg/50 p-3 text-xs">
-            <strong>Loja:</strong> {pedido.avaliacaoLoja.nota}/5 ★ —{' '}
-            {pedido.avaliacaoLoja.comentario ?? 'Sem comentário'}
-          </div>
-        ) : (
-          <AvaliacaoPedidoForm alvo="loja" idPedido={pedido.idPedido} onEnviar={onEnviarAvaliacao} />
-        )}
-
-        {pedido.avaliacaoEntregador ? (
-          <div className="rounded-2xl bg-surface-bg/50 p-3 text-xs">
-            <strong>Entregador:</strong> {pedido.avaliacaoEntregador.nota}/5 ★ —{' '}
-            {pedido.avaliacaoEntregador.comentario ?? 'Sem comentário'}
-          </div>
-        ) : (
-          <AvaliacaoPedidoForm
-            alvo="entregador"
-            idPedido={pedido.idPedido}
-            onEnviar={onEnviarAvaliacao}
-          />
-        )}
-      </div>
+          {pedido.avaliacaoEntregador ? (
+            <div className="space-y-1 rounded-2xl bg-surface-bg/50 p-3 text-xs">
+              <div className="flex items-center justify-between">
+                <strong>Entregador</strong>
+                <StarRating nota={pedido.avaliacaoEntregador.nota} rotulo="Avaliação do entregador" />
+              </div>
+              <p className="text-text-default">
+                {pedido.avaliacaoEntregador.comentario ?? 'Sem comentário'}
+              </p>
+            </div>
+          ) : ehCliente && pedido.status === 'concluido' ? (
+            <AvaliacaoPedidoForm
+              alvo="entregador"
+              idPedido={pedido.idPedido}
+              onEnviar={onEnviarAvaliacao}
+            />
+          ) : null}
+        </div>
+      )}
     </aside>
   )
 }

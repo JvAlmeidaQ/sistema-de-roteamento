@@ -21,6 +21,7 @@ export interface UsuarioSessao {
   perfilCliente: boolean
   perfilLojista: boolean
   perfilEntregador?: boolean
+  administrador?: boolean
   idLoja: number | null
   nomeLoja: string | null
 }

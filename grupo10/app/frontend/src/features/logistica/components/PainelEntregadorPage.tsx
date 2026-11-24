@@ -21,9 +21,8 @@ export default function PainelEntregadorPage() {
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <p className="text-sm font-semibold uppercase tracking-wide text-brand-dark">Logística</p>
-        <h2 className="text-3xl sm:text-4xl">Painel do entregador</h2>
-        <p>Consulte a fila de entregas e acompanhe a sua rota.</p>
+        <h2 className="text-3xl font-semibold text-brand-dark">Painel do entregador</h2>
+        <p className="text-sm text-text-default">Consulte a fila de entregas e acompanhe a sua rota.</p>
       </header>
 
       {carregandoUsuarios ? (

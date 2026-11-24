@@ -5,6 +5,7 @@
  */
 import { Link } from 'react-router-dom'
 import { formatarDataHora, formatarIdPedido } from '@/features/comercio/components/StatusBadge'
+import { formatarCodigoRota, limparNomeLoja } from '@/lib/apresentacao'
 import type { AcaoEntrega } from '../hooks/usePainelEntregador'
 import type { EntregaDisponivel, Pagina, RotaAtual, RotaResumo } from '../types/logistica.types'
 import { botaoPrimarioClass, botaoSecundarioClass, linkRastreioClass, secaoPainelClass } from './painel.styles'
@@ -64,9 +65,9 @@ export function EntregasDisponiveisSection({ lista, ocupado, onPaginar, rota, id
 
       {bloqueada && (
         <div id="logistica-bloqueio" className="space-y-1 rounded-xl border border-state-pending/40 bg-state-pending/10 p-4 text-sm text-brand-pit">
-          <p className="font-semibold">Não é possível assumir outra entrega agora.</p>
-          {temAtraso && <p>Há entregas em atraso na sua rota. Finalize as atrasadas antes de assumir outra.</p>}
-          {lotada && <p>A rota está lotada. As entregas concluídas ocupam vaga até o encerramento da rota.</p>}
+          <p className="font-semibold">Novas entregas temporariamente bloqueadas.</p>
+          {temAtraso && <p>Sua rota atual possui uma entrega com prazo vencido. Finalize-a antes de assumir outra entrega.</p>}
+          {lotada && <p>A rota atual já atingiu o limite de entregas. Conclua as entregas ativas para liberar novas rotas.</p>}
         </div>
       )}
 
@@ -77,11 +78,19 @@ export function EntregasDisponiveisSection({ lista, ocupado, onPaginar, rota, id
           {lista.itens.map((entrega) => {
             const pedido = formatarIdPedido(entrega.idPedido)
             const rotulo = idAssumindo === entrega.idEntrega ? 'Assumindo…' : 'Assumir'
+            const prazoVencido = Date.parse(entrega.previsaoEntrega) < Date.now()
             return (
               <li key={entrega.idEntrega} className="grid gap-3 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                 <div className="min-w-0 wrap-break-word text-sm">
-                  <h4 className="text-xl">Pedido {pedido}</h4>
-                  <p className="font-semibold text-brand-dark">{entrega.nomeLoja}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="text-xl">{pedido}</h4>
+                    {prazoVencido && (
+                      <span className="rounded-full bg-state-pending/15 px-2.5 py-0.5 text-[11px] font-semibold text-brand-pit">
+                        Prazo vencido
+                      </span>
+                    )}
+                  </div>
+                  <p className="font-semibold text-brand-dark">{limparNomeLoja(entrega.nomeLoja)}</p>
                   <p>Região de destino: {entrega.bairroDestino}, {entrega.cidadeDestino} – {entrega.estadoDestino}</p>
                   <p>
                     Previsão: <time dateTime={entrega.previsaoEntrega}>{formatarDataHora(entrega.previsaoEntrega)}</time>
@@ -90,7 +99,7 @@ export function EntregasDisponiveisSection({ lista, ocupado, onPaginar, rota, id
                 <button
                   type="button"
                   disabled={ocupado || bloqueada}
-                  aria-label={`${rotulo} · Pedido ${pedido}`}
+                  aria-label={`${rotulo} · ${pedido}`}
                   aria-describedby={bloqueada ? 'logistica-bloqueio' : undefined}
                   onClick={() => onAssumir({ idEntrega: entrega.idEntrega, idPedido: entrega.idPedido, tipo: 'assumir' })}
                   className={botaoPrimarioClass}
@@ -117,7 +126,7 @@ export function RotasEncerradasSection({ lista, ocupado, onPaginar }: ListaPagin
         <ul role="list" className="divide-y divide-surface-bg">
           {lista.itens.map((rota) => (
             <li key={rota.idRota} className="space-y-1 py-4 text-sm">
-              <h4 className="text-xl">Rota #{String(rota.idRota).padStart(6, '0')}</h4>
+              <h4 className="text-xl">{formatarCodigoRota(rota.idRota)}</h4>
               <p>{rota.totalEntregas} {rota.totalEntregas === 1 ? 'entrega' : 'entregas'}</p>
               <p>Aberta em <time dateTime={rota.criadaEm}>{formatarDataHora(rota.criadaEm)}</time></p>
               <p>Encerrada em <time dateTime={rota.encerradaEm}>{formatarDataHora(rota.encerradaEm)}</time></p>

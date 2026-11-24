@@ -1,15 +1,19 @@
 /**
  * Disciplina: DCC061 (Engenharia de Software)
- * Feature Flag: VITE_APP_MODE=full (!isBd)
- * Subdomínio: Identidade e Contato — RF01 (criação e edição de perfil)
- * Atende no cliente: RN10, RN11, RR01, RR03, RR12, RR14, RR16 e RR17
+ * Subdomínio: Identidade e Contato — Cadastro e edição de perfil
  */
+import { ArrowLeft, Plus } from 'lucide-react'
 import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useFieldArray, useForm, type Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
-import { identidadeApi, lerErroApi, type ErroApi } from '../api/identidade.api'
+import {
+  papeisDoUsuario,
+  rotaInicialPorPapel,
+  useSessaoUsuario,
+} from '@/context/SessaoUsuarioContext'
+import { limparNomeLoja } from '@/lib/apresentacao'
+import { autenticacaoApi, identidadeApi, lerErroApi, type ErroApi } from '../api/identidade.api'
 import { usePerfil } from '../hooks/usePerfis'
 import {
   ENDERECO_VAZIO,
@@ -58,9 +62,9 @@ function Campo({ id, label, erro, children, className }: {
 
 function Secao({ titulo, descricao, children }: { titulo: string; descricao?: string; children: ReactNode }) {
   return (
-    <section className="rounded-3xl bg-surface p-6 shadow-low">
-      <h3 className="text-lg">{titulo}</h3>
-      {descricao && <p className="mb-4 text-xs">{descricao}</p>}
+    <section className="rounded-2xl border border-surface-bg bg-surface p-6">
+      <h3 className="text-lg font-semibold text-brand-dark">{titulo}</h3>
+      {descricao && <p className="mb-4 text-xs text-text-default">{descricao}</p>}
       <div className={descricao ? '' : 'mt-4'}>{children}</div>
     </section>
   )
@@ -168,7 +172,7 @@ function montarPayload(v: PerfilFormValues, perfil: Perfil | null): PerfilReques
 export default function PerfilFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { usuarioAtual } = useSessaoUsuario()
+  const { usuarioAtual, papelAtivo, entrarComSessao, recarregarSessao } = useSessaoUsuario()
   const idPessoa = id ? Number(id) : null
   const modoEdicao = idPessoa !== null
   const idValido = !modoEdicao || (Number.isSafeInteger(idPessoa) && (idPessoa ?? 0) > 0)
@@ -242,12 +246,36 @@ export default function PerfilFormPage() {
     setErroApi(null)
     try {
       const payload = montarPayload(valores, perfil)
-      const salvo = modoEdicao && idPessoa !== null
-        ? await identidadeApi.atualizarPerfil(idPessoa, payload)
-        : await identidadeApi.criarPerfil(payload)
-      navigate(`/perfis/${salvo.idPessoa}`, {
-        state: { mensagem: modoEdicao ? 'Perfil atualizado com sucesso.' : 'Perfil cadastrado com sucesso.' },
-      })
+      if (!modoEdicao) {
+        const disp = await autenticacaoApi.verificarDisponibilidade({
+          email: payload.email,
+          cpf: payload.cpf ?? undefined,
+        })
+        if (!disp.emailDisponivel || !disp.cpfDisponivel) {
+          const identificador = !disp.emailDisponivel ? payload.email : (payload.cpf ?? '')
+          navigate('/entrar', {
+            state: {
+              identificador,
+              aviso: 'Já existe uma conta cadastrada com estes dados. Entre na sua conta para continuar.',
+            },
+          })
+          return
+        }
+        const salvo = await identidadeApi.criarPerfil(payload)
+        const sessao = await autenticacaoApi.entrar(salvo.email)
+        entrarComSessao(sessao)
+        const papeis = papeisDoUsuario(sessao)
+        navigate(rotaInicialPorPapel(papeis[0] ?? 'cliente'), { replace: true })
+        return
+      }
+
+      if (idPessoa !== null) {
+        const salvo = await identidadeApi.atualizarPerfil(idPessoa, payload)
+        await recarregarSessao()
+        navigate(`/perfis/${salvo.idPessoa}`, {
+          state: { mensagem: 'Perfil atualizado com sucesso.' },
+        })
+      }
     } catch (e) {
       const falha = lerErroApi(e)
       setErroApi(falha)
@@ -264,19 +292,25 @@ export default function PerfilFormPage() {
     return <p role="alert" className="text-state-error">Identificador de pessoa inválido.</p>
   }
   if (modoEdicao && carregando) {
-    return <div className="h-64 animate-pulse rounded-3xl bg-surface" role="status" aria-label="Carregando perfil" />
+    return <div className="h-64 animate-pulse rounded-2xl bg-surface" role="status" aria-label="Carregando perfil" />
   }
   if (modoEdicao && (erroCarga || !perfil)) {
     return (
       <div className="space-y-3">
         <p role="alert" className="rounded-2xl bg-state-error/10 px-4 py-3 text-sm text-state-error">
           {erroCarga?.status === 403
-            ? 'Você só tem permissão para editar o seu próprio perfil. Selecione esta conta no seletor Sessão (X-User-Id) para continuar.'
+            ? 'Você só tem permissão para editar o seu próprio perfil.'
             : erroCarga?.status === 404
-              ? 'Pessoa não encontrada.'
+              ? 'Conta não encontrada.'
               : erroCarga?.mensagem ?? 'Não foi possível carregar o perfil.'}
         </p>
-        <Link to="/perfis" className="text-sm font-semibold text-brand-outline hover:underline">← Voltar para a lista</Link>
+        <Link
+          to={papelAtivo === 'admin' ? '/perfis' : rotaInicialPorPapel(papelAtivo)}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-outline hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Voltar
+        </Link>
       </div>
     )
   }
@@ -284,14 +318,27 @@ export default function PerfilFormPage() {
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
       <header className="space-y-1">
-        <Link
-          to={modoEdicao ? `/perfis/${idPessoa}` : '/perfis'}
-          className="text-sm font-semibold text-brand-outline hover:underline"
-        >
-          ← {modoEdicao ? 'Voltar ao perfil' : 'Perfis'}
-        </Link>
-        <h2 className="text-3xl">{modoEdicao ? `Editar perfil — ${perfil?.nome}` : 'Novo perfil'}</h2>
-        <p className="text-sm">Campos com * são obrigatórios. Tudo é salvo em uma única transação.</p>
+        {modoEdicao ? (
+          <Link
+            to={`/perfis/${idPessoa}`}
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-outline hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Voltar ao perfil
+          </Link>
+        ) : (
+          <Link
+            to="/entrar"
+            className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-outline hover:underline"
+          >
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+            Já tenho conta
+          </Link>
+        )}
+        <h2 className="text-3xl font-semibold text-brand-dark">
+          {modoEdicao ? `Editar perfil — ${perfil?.nome}` : 'Criar conta'}
+        </h2>
+        <p className="text-sm text-text-default">Campos com * são obrigatórios.</p>
       </header>
 
       {erroApi && (
@@ -313,7 +360,7 @@ export default function PerfilFormPage() {
           </Campo>
           <Campo
             id="perfil-cpf"
-            label={modoEdicao ? 'CPF (não pode ser alterado)' : 'CPF * (RN10/RN11)'}
+            label={modoEdicao ? 'CPF (não pode ser alterado)' : 'CPF *'}
             erro={errors.cpf}
           >
             <input
@@ -334,12 +381,12 @@ export default function PerfilFormPage() {
       {/* ------------------------------------------------------------ Funções */}
       <Secao
         titulo="Funções"
-        descricao="RR16: escolha ao menos uma. A mesma pessoa pode acumular mais de uma função."
+        descricao="Escolha ao menos uma função. Você pode acumular mais de um papel na mesma conta."
       >
         <div className="grid gap-3 md:grid-cols-3">
           {([
             ['cliente', 'Cliente', 'Faz pedidos nas lojas.', travaCliente, 'Possui pedidos registrados.'],
-            ['lojista', 'Lojista', 'Responsável por uma ou mais lojas.', travaLojista, 'Responsável por loja(s) — RR01.'],
+            ['lojista', 'Lojista', 'Responsável por uma ou mais lojas.', travaLojista, 'Possui loja vinculada.'],
             ['entregador', 'Entregador', 'Realiza entregas em rotas.', travaEntregador, 'Possui rotas registradas.'],
           ] as const).map(([campo, titulo, descricao, travado, motivo]) => (
             <label
@@ -379,7 +426,7 @@ export default function PerfilFormPage() {
       </Secao>
 
       {/* ------------------------------------------------------------ Telefones */}
-      <Secao titulo="Telefones" descricao="RR17: ao menos um telefone, com DDD.">
+      <Secao titulo="Telefones" descricao="Informe ao menos um telefone com DDD.">
         <div className="space-y-3">
           {telefones.fields.map((field, i) => (
             <div key={field.id} className="flex flex-wrap items-start gap-3">
@@ -403,7 +450,7 @@ export default function PerfilFormPage() {
                 type="button"
                 onClick={() => telefones.remove(i)}
                 disabled={telefones.fields.length === 1}
-                title={telefones.fields.length === 1 ? 'RR17: a pessoa precisa de ao menos um telefone.' : 'Remover telefone'}
+                title={telefones.fields.length === 1 ? 'É necessário manter ao menos um telefone.' : 'Remover telefone'}
                 className="mt-6 rounded-full px-3 py-2 text-xs font-semibold text-state-error hover:bg-state-error/10 disabled:opacity-40"
               >
                 Remover
@@ -417,9 +464,10 @@ export default function PerfilFormPage() {
         <button
           type="button"
           onClick={() => telefones.append({ numero: '', tipo: 'celular' })}
-          className="mt-3 rounded-full border border-brand-outline px-4 py-1.5 text-xs font-semibold text-brand-outline hover:bg-brand-lime/20"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-brand-outline px-4 py-1.5 text-xs font-semibold text-brand-outline hover:bg-brand-lime/20"
         >
-          + Adicionar telefone
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          Adicionar telefone
         </button>
       </Secao>
 
@@ -428,8 +476,8 @@ export default function PerfilFormPage() {
         titulo="Endereços"
         descricao={
           cliente
-            ? 'Todo cliente precisa de ao menos um endereço e de um endereço atual. Rua, número e CEP de um endereço salvo não mudam (RR12); para mudar, adicione outro e remova o antigo.'
-            : 'Opcional para quem não é cliente. Rua, número e CEP de um endereço salvo não mudam (RR12).'
+            ? 'Todo cliente precisa de um endereço atual. Para mudar rua, número ou CEP, adicione um novo endereço.'
+            : 'Opcional para quem não é cliente.'
         }
       >
         <div className="space-y-4">
@@ -443,7 +491,7 @@ export default function PerfilFormPage() {
               >
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-semibold text-brand-dark">
-                    {existente ? `Endereço salvo #${field.idEndereco}` : 'Novo endereço'}
+                    {existente ? (field.apelido?.trim() || 'Endereço salvo') : 'Novo endereço'}
                   </span>
                   <div className="flex items-center gap-3">
                     {cliente && (
@@ -522,23 +570,24 @@ export default function PerfilFormPage() {
         <button
           type="button"
           onClick={adicionarEndereco}
-          className="mt-3 rounded-full border border-brand-outline px-4 py-1.5 text-xs font-semibold text-brand-outline hover:bg-brand-lime/20"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-brand-outline px-4 py-1.5 text-xs font-semibold text-brand-outline hover:bg-brand-lime/20"
         >
-          + Adicionar endereço
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          Adicionar endereço
         </button>
       </Secao>
 
-      {/* ------------------------------------------------------------ Primeira loja (RR01) */}
+      {/* ------------------------------------------------------------ Primeira loja */}
       {lojista && !possuiLoja && (
         <Secao
           titulo="Primeira loja"
-          descricao="RR01: todo lojista precisa de ao menos uma loja. Ela é criada junto com o perfil; produtos e categorias são cadastrados depois, no Painel do Lojista."
+          descricao="Cadastre os dados da sua loja. Produtos e categorias poderão ser gerenciados no painel após o cadastro."
         >
           <div className="grid gap-3 md:grid-cols-6">
             <Campo id="loja-nome" label="Nome da loja *" erro={errors.primeiraLoja?.nome} className="md:col-span-3">
               <input id="loja-nome" {...register('primeiraLoja.nome')} className={inputClass} />
             </Campo>
-            <Campo id="loja-cnpj" label="CNPJ * (RN10/RN11)" erro={errors.primeiraLoja?.cnpj} className="md:col-span-2">
+            <Campo id="loja-cnpj" label="CNPJ *" erro={errors.primeiraLoja?.cnpj} className="md:col-span-2">
               <input
                 id="loja-cnpj"
                 inputMode="numeric"
@@ -599,11 +648,11 @@ export default function PerfilFormPage() {
       )}
 
       {lojista && possuiLoja && perfil && (
-        <Secao titulo="Lojas" descricao="As lojas são gerenciadas no Painel do Lojista (dados operacionais, catálogo e status).">
+        <Secao titulo="Lojas" descricao="Gerencie produtos, categorias e operação em Minha loja.">
           <ul className="space-y-1 text-sm">
             {perfil.lojas.map((l) => (
               <li key={l.idLoja}>
-                <span className="font-semibold text-brand-dark">#{l.idLoja} · {l.nome}</span> — CNPJ {mascaraCnpj(l.cnpj)}
+                <span className="font-semibold text-brand-dark">{limparNomeLoja(l.nome)}</span> — CNPJ {mascaraCnpj(l.cnpj)}
               </li>
             ))}
           </ul>
@@ -622,9 +671,9 @@ export default function PerfilFormPage() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-full bg-brand-lime px-6 py-2 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40 disabled:opacity-50"
+          className="rounded-full bg-brand-lime px-6 py-2 text-sm font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80 disabled:opacity-50"
         >
-          {isSubmitting ? 'Salvando…' : modoEdicao ? 'Salvar alterações' : 'Cadastrar perfil'}
+          {isSubmitting ? 'Salvando…' : modoEdicao ? 'Salvar alterações' : 'Criar conta'}
         </button>
       </div>
     </form>
