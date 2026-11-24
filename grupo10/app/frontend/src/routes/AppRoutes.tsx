@@ -33,6 +33,13 @@ const PerfilDetalhePage = !isBd
 const PerfilFormPage = !isBd
   ? lazy(() => import('@/features/identidade/components/PerfilFormPage'))
   : null
+// Subdomínio Auditoria (RF05, RF10) — exclusivo de ES
+const AuditoriaRastreioPage = !isBd
+  ? lazy(() => import('@/features/auditoria/components/AuditoriaRastreioPage'))
+  : null
+const AuditoriaSlaPage = !isBd
+  ? lazy(() => import('@/features/auditoria/components/AuditoriaSlaPage'))
+  : null
 
 export function AppRoutes() {
   return (
@@ -104,6 +111,26 @@ export function AppRoutes() {
                 element={(
                   <Suspense fallback={<p role="status">Carregando formulário…</p>}>
                     <PerfilFormPage />
+                  </Suspense>
+                )}
+              />
+            </>
+          )}
+          {AuditoriaRastreioPage && AuditoriaSlaPage && (
+            <>
+              <Route
+                path="/auditoria"
+                element={(
+                  <Suspense fallback={<p role="status">Carregando rastreamento de auditoria…</p>}>
+                    <AuditoriaRastreioPage />
+                  </Suspense>
+                )}
+              />
+              <Route
+                path="/auditoria/sla"
+                element={(
+                  <Suspense fallback={<p role="status">Carregando painel de SLA…</p>}>
+                    <AuditoriaSlaPage />
                   </Suspense>
                 )}
               />

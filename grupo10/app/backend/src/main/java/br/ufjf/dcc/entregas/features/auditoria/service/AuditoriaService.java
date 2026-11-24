@@ -6,14 +6,14 @@
  */
 package br.ufjf.dcc.entregas.features.auditoria.service;
 
+import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
+import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
 import br.ufjf.dcc.entregas.features.auditoria.dto.EventoHistoricoResponse;
 import br.ufjf.dcc.entregas.features.auditoria.dto.LinhaTempoPedidoResponse;
 import br.ufjf.dcc.entregas.features.auditoria.dto.SlaEntregaResponse;
 import br.ufjf.dcc.entregas.features.auditoria.repository.AuditoriaRepository;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -35,8 +35,7 @@ public class AuditoriaService {
 
     public List<EventoHistoricoResponse> consultarHistoricoEntrega(Long idEntrega) {
         if (!auditoriaRepository.existeEntrega(idEntrega)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
+            throw new RecursoNaoEncontradoException(
                     "Entrega não encontrada para o identificador informado: " + idEntrega
             );
         }
@@ -55,8 +54,7 @@ public class AuditoriaService {
             OffsetDateTime fim
     ) {
         if (inicio != null && fim != null && inicio.isAfter(fim)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
+            throw new RequisicaoInvalidaException(
                     "A data de início não pode ser posterior à data de fim."
             );
         }
@@ -65,8 +63,7 @@ public class AuditoriaService {
 
     private void validarExistenciaPedido(Long idPedido) {
         if (!auditoriaRepository.existePedido(idPedido)) {
-            throw new ResponseStatusException(
-                    HttpStatus.NOT_FOUND,
+            throw new RecursoNaoEncontradoException(
                     "Pedido não encontrado para o identificador informado: " + idPedido
             );
         }
