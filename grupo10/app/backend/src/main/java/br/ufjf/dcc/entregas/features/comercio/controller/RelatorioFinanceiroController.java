@@ -37,28 +37,31 @@ public class RelatorioFinanceiroController {
     @GetMapping("/lojas/resumo-financeiro")
     public List<ResumoFinanceiroLojaResponse> listarResumoFinanceiro(
             @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
+            @RequestHeader(value = "X-Active-Role", required = false) String papelAtivo,
             @RequestParam(required = false) @Positive Long idLoja
     ) {
-        return relatorioService.listarResumoFinanceiroLojas(idUsuarioAutenticado, idLoja);
+        return relatorioService.listarResumoFinanceiroLojas(idUsuarioAutenticado, papelAtivo, idLoja);
     }
 
     @GetMapping("/lojas/{idLoja}/relatorio")
     public RelatorioPedidosLojaResponse relatorioLoja(
             @RequestHeader(value = "X-User-Id", required = false) @Positive Long idUsuarioAutenticado,
+            @RequestHeader(value = "X-Active-Role", required = false) String papelAtivo,
             @PathVariable @Positive Long idLoja,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dataInicio,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime dataFim,
             @RequestParam(defaultValue = "25") @Min(1) @Max(200) int limit
     ) {
-        return relatorioService.gerarRelatorioLoja(idUsuarioAutenticado, idLoja, status, dataInicio, dataFim, limit);
+        return relatorioService.gerarRelatorioLoja(idUsuarioAutenticado, papelAtivo, idLoja, status, dataInicio, dataFim, limit);
     }
 
     @GetMapping("/consultas/{numero}")
     public ConsultaEstrategicaResponse executarConsultaEstrategica(
             @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
+            @RequestHeader(value = "X-Active-Role", required = false) String papelAtivo,
             @PathVariable @Min(5) @Max(12) int numero
     ) {
-        return relatorioService.executarConsultaEstrategica(idUsuarioAutenticado, numero);
+        return relatorioService.executarConsultaEstrategica(idUsuarioAutenticado, papelAtivo, numero);
     }
 }

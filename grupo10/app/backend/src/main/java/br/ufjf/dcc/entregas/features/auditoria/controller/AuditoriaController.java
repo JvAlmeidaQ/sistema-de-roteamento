@@ -60,6 +60,7 @@ public class AuditoriaController {
     @GetMapping("/sla/entregas")
     public List<SlaEntregaResponse> listarSlaEntregas(
             @RequestHeader(value = "X-User-Id", required = false) Long idUsuario,
+            @RequestHeader(value = "X-Active-Role", required = false) String papelAtivo,
             @RequestParam(required = false) @Positive Long idLoja,
             @RequestParam(required = false) Boolean apenasAtrasadas,
             @RequestParam(required = false)
@@ -67,6 +68,6 @@ public class AuditoriaController {
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime fim
     ) {
-        return auditoriaService.consultarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, idUsuario);
+        return auditoriaService.consultarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, idUsuario, papelAtivo);
     }
 }

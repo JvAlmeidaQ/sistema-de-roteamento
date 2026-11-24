@@ -43,9 +43,13 @@ public class RelatorioComercioService {
         this.adminAccessService = adminAccessService;
     }
 
-    public List<ResumoFinanceiroLojaResponse> listarResumoFinanceiroLojas(Long idUsuarioAutenticado, Long idLoja) {
+    public List<ResumoFinanceiroLojaResponse> listarResumoFinanceiroLojas(
+            Long idUsuarioAutenticado,
+            String papelAtivo,
+            Long idLoja
+    ) {
         adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
-        if (adminAccessService.isAdmin(idUsuarioAutenticado)) {
+        if (adminAccessService.atuandoComoAdmin(idUsuarioAutenticado, papelAtivo)) {
             return relatorioRepository.listarResumoFinanceiroLojas(idLoja);
         }
 
@@ -64,6 +68,7 @@ public class RelatorioComercioService {
 
     public RelatorioPedidosLojaResponse gerarRelatorioLoja(
             Long idUsuarioAutenticado,
+            String papelAtivo,
             Long idLoja,
             String statusLiteral,
             OffsetDateTime dataInicio,
@@ -79,7 +84,8 @@ public class RelatorioComercioService {
         var loja = pedidoRepository.buscarLoja(idLoja)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Loja não encontrada."));
 
-        if (!adminAccessService.isAdmin(idUsuarioAutenticado) && !loja.getIdLojista().equals(idUsuarioAutenticado)) {
+        if (!adminAccessService.atuandoComoAdmin(idUsuarioAutenticado, papelAtivo)
+                && !loja.getIdLojista().equals(idUsuarioAutenticado)) {
             throw new AcessoNegadoException("Você só pode consultar relatórios da sua própria loja.");
         }
 
@@ -106,13 +112,17 @@ public class RelatorioComercioService {
         );
     }
 
-    public ConsultaEstrategicaResponse executarConsultaEstrategica(Long idUsuarioAutenticado, int numero) {
+    public ConsultaEstrategicaResponse executarConsultaEstrategica(
+            Long idUsuarioAutenticado,
+            String papelAtivo,
+            int numero
+    ) {
         adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
         if (numero < 5 || numero > 12) {
             throw new RequisicaoInvalidaException("Consulta gerencial inválida.");
         }
 
-        if (adminAccessService.isAdmin(idUsuarioAutenticado)) {
+        if (adminAccessService.atuandoComoAdmin(idUsuarioAutenticado, papelAtivo)) {
             return relatorioRepository.executarConsultaEstrategica(numero, null);
         }
 

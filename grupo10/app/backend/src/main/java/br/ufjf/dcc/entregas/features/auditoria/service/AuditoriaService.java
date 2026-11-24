@@ -68,7 +68,8 @@ public class AuditoriaService {
             Boolean apenasAtrasadas,
             OffsetDateTime inicio,
             OffsetDateTime fim,
-            Long idUsuario
+            Long idUsuario,
+            String papelAtivo
     ) {
         adminAccessService.exigirIdentificacao(idUsuario);
         if (inicio != null && fim != null && inicio.isAfter(fim)) {
@@ -76,17 +77,35 @@ public class AuditoriaService {
                     "A data de início não pode ser posterior à data de fim."
             );
         }
-        if (adminAccessService.isAdmin(idUsuario)) {
+        if (adminAccessService.atuandoComoAdmin(idUsuario, papelAtivo)) {
             return auditoriaRepository.listarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, null, null);
         }
-        if (auditoriaRepository.isLojista(idUsuario)) {
+        String roleNorm = papelAtivo != null ? papelAtivo.trim().toLowerCase() : "";
+        if ("entregador".equals(roleNorm)) {
+            if (!auditoriaRepository.isEntregador(idUsuario)) {
+                throw new AcessoNegadoException("Você não possui perfil de entregador.");
+            }
+            return auditoriaRepository.listarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, null, idUsuario);
+        }
+        if ("lojista".equals(roleNorm)) {
+            if (!auditoriaRepository.isLojista(idUsuario)) {
+                throw new AcessoNegadoException("Você não possui perfil de lojista.");
+            }
             if (idLoja != null && !auditoriaRepository.lojaPertenceAoLojista(idLoja, idUsuario)) {
                 throw new AcessoNegadoException("Você só pode consultar o SLA das suas próprias lojas.");
             }
             return auditoriaRepository.listarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, idUsuario, null);
         }
-        if (auditoriaRepository.isEntregador(idUsuario)) {
-            return auditoriaRepository.listarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, null, idUsuario);
+        if (roleNorm.isEmpty() || "admin".equals(roleNorm)) {
+            if (auditoriaRepository.isLojista(idUsuario)) {
+                if (idLoja != null && !auditoriaRepository.lojaPertenceAoLojista(idLoja, idUsuario)) {
+                    throw new AcessoNegadoException("Você só pode consultar o SLA das suas próprias lojas.");
+                }
+                return auditoriaRepository.listarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, idUsuario, null);
+            }
+            if (auditoriaRepository.isEntregador(idUsuario)) {
+                return auditoriaRepository.listarSlaEntregas(idLoja, apenasAtrasadas, inicio, fim, null, idUsuario);
+            }
         }
         throw new AcessoNegadoException(
                 "O painel de SLA é restrito a administradores, lojistas e entregadores."

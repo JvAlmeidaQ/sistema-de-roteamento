@@ -518,6 +518,18 @@ class ComercioFinancasIntegrationTest {
                         .param("idLoja", "2"))
                 .andExpect(status().isForbidden());
 
+        // Admin (id=7) atuando como Lojista sem loja (X-Active-Role: lojista) recebe 403 em vez de dados globais
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro")
+                        .header("X-User-Id", 7L)
+                        .header("X-Active-Role", "lojista"))
+                .andExpect(status().isForbidden());
+        // Admin (id=7) atuando como Admin vê visão consolidada
+        mockMvc.perform(get("/api/comercio/lojas/resumo-financeiro")
+                        .header("X-User-Id", 7L)
+                        .header("X-Active-Role", "admin"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].idLoja").exists());
+
         // Outro usuário não pode consultar relatório da loja 1 -> 403
         mockMvc.perform(get("/api/comercio/lojas/1/relatorio")
                         .header("X-User-Id", idClienteComEndereco)

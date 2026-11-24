@@ -34,6 +34,13 @@ public class AdminAccessService {
         return idUsuario != null && adminUserIds.contains(idUsuario);
     }
 
+    public boolean atuandoComoAdmin(Long idUsuario, String activeRole) {
+        if (!isAdmin(idUsuario)) {
+            return false;
+        }
+        return activeRole == null || activeRole.isBlank() || "admin".equalsIgnoreCase(activeRole.trim());
+    }
+
     public void exigirIdentificacao(Long idUsuario) {
         if (idUsuario == null || idUsuario <= 0) {
             throw new AcessoNegadoException("Identifique-se para acessar este recurso.");

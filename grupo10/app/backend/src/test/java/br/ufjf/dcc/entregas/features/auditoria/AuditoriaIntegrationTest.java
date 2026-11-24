@@ -352,6 +352,22 @@ class AuditoriaIntegrationTest {
                 .hasMessageContaining("RN08");
     }
 
+    @Test
+    @DisplayName("Segurança: Admin atuando como entregador via X-Active-Role restringe SLA às próprias entregas")
+    void deveRespeitarPapelAtivoDoAdminNoSla() throws Exception {
+        // ID 7 é administrador e entregador na carga; com X-Active-Role=entregador não deve receber entregas de terceiros
+        mockMvc.perform(get("/api/auditoria/sla/entregas")
+                        .header("X-User-Id", 7L)
+                        .header("X-Active-Role", "entregador"))
+                .andExpect(status().isOk());
+
+        // ID 7 não é lojista -> X-Active-Role=lojista deve retornar 403
+        mockMvc.perform(get("/api/auditoria/sla/entregas")
+                        .header("X-User-Id", 7L)
+                        .header("X-Active-Role", "lojista"))
+                .andExpect(status().isForbidden());
+    }
+
     private JsonNode lerJson(ResultActions resultado) throws Exception {
         return objectMapper.readTree(resultado.andReturn().getResponse().getContentAsString());
     }

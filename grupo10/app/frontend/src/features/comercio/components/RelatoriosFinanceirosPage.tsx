@@ -35,19 +35,24 @@ export function RelatoriosFinanceirosPage() {
   const [dataFim, setDataFim] = useState<string>('')
 
   useEffect(() => {
-    if (papelAtivo === 'lojista' && usuarioAtual?.idLoja) {
-      setIdLojaFiltro(usuarioAtual.idLoja)
+    if (papelAtivo === 'lojista') {
       setAba((atual) => (atual === 'visao' ? 'parametrizado' : atual))
-      void buscarRelatorioParametrizado(usuarioAtual.idLoja, {
-        status: statusFiltro,
-        dataInicio,
-        dataFim,
-      })
-    } else if (papelAtivo === 'admin' && lojas[0] && idLojaFiltro === 0) {
-      setIdLojaFiltro(lojas[0].idLoja)
+      if (usuarioAtual?.idLoja) {
+        setIdLojaFiltro(usuarioAtual.idLoja)
+        void buscarRelatorioParametrizado(usuarioAtual.idLoja, {
+          status: statusFiltro,
+          dataInicio,
+          dataFim,
+        })
+      } else {
+        setIdLojaFiltro(0)
+      }
+    } else if (papelAtivo === 'admin') {
+      setAba('visao')
+      setIdLojaFiltro(lojas[0]?.idLoja ?? 0)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [papelAtivo, usuarioAtual?.idLoja, lojas])
+  }, [papelAtivo, usuarioAtual?.idPessoa, usuarioAtual?.idLoja, lojas])
 
   const resumoMinhaLoja = !ehAdmin ? resumoLojas[0] ?? null : null
   const nomeLojaTitulo =

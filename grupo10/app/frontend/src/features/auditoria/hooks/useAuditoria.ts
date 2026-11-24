@@ -4,6 +4,7 @@
  * Subdomínio: Auditoria — hooks de consulta de rastreio e SLA (RF05, RF10)
  */
 import { useCallback, useEffect, useState } from 'react'
+import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
 import { auditoriaApi, lerErroApi, type ErroApi } from '../api/auditoria.api'
 import type {
   FiltroSlaEntregas,
@@ -14,13 +15,14 @@ import type {
 } from '../types/auditoria.types'
 
 export function useRastreioPedido(idPedido: number | null) {
+  const { usuarioAtual, papelAtivo } = useSessaoUsuario()
   const [linhaTempo, setLinhaTempo] = useState<LinhaTempoEvento[]>([])
   const [historicoComercial, setHistoricoComercial] = useState<HistoricoPedidoEvento[]>([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<ErroApi | null>(null)
 
   const recarregar = useCallback(async () => {
-    if (!idPedido) {
+    if (!idPedido || !usuarioAtual?.idPessoa) {
       setLinhaTempo([])
       setHistoricoComercial([])
       setErro(null)
@@ -42,7 +44,7 @@ export function useRastreioPedido(idPedido: number | null) {
     } finally {
       setCarregando(false)
     }
-  }, [idPedido])
+  }, [idPedido, usuarioAtual?.idPessoa, papelAtivo])
 
   useEffect(() => {
     void recarregar()
@@ -52,12 +54,13 @@ export function useRastreioPedido(idPedido: number | null) {
 }
 
 export function useHistoricoEntrega(idEntrega: number | null) {
+  const { usuarioAtual, papelAtivo } = useSessaoUsuario()
   const [eventos, setEventos] = useState<HistoricoEntregaEvento[]>([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState<ErroApi | null>(null)
 
   const recarregar = useCallback(async () => {
-    if (!idEntrega) {
+    if (!idEntrega || !usuarioAtual?.idPessoa) {
       setEventos([])
       setErro(null)
       return
@@ -72,7 +75,7 @@ export function useHistoricoEntrega(idEntrega: number | null) {
     } finally {
       setCarregando(false)
     }
-  }, [idEntrega])
+  }, [idEntrega, usuarioAtual?.idPessoa, papelAtivo])
 
   useEffect(() => {
     void recarregar()
@@ -82,6 +85,7 @@ export function useHistoricoEntrega(idEntrega: number | null) {
 }
 
 export function useSlaEntregas(filtros: FiltroSlaEntregas) {
+  const { usuarioAtual, papelAtivo } = useSessaoUsuario()
   const [itens, setItens] = useState<SlaEntregaItem[]>([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<ErroApi | null>(null)
@@ -89,6 +93,12 @@ export function useSlaEntregas(filtros: FiltroSlaEntregas) {
   const { idLoja, apenasAtrasadas, inicio, fim } = filtros
 
   const recarregar = useCallback(async () => {
+    if (!usuarioAtual?.idPessoa || !papelAtivo) {
+      setItens([])
+      setCarregando(false)
+      return
+    }
+    setItens([])
     setCarregando(true)
     setErro(null)
     try {
@@ -105,7 +115,7 @@ export function useSlaEntregas(filtros: FiltroSlaEntregas) {
     } finally {
       setCarregando(false)
     }
-  }, [idLoja, apenasAtrasadas, inicio, fim])
+  }, [idLoja, apenasAtrasadas, inicio, fim, usuarioAtual?.idPessoa, papelAtivo])
 
   useEffect(() => {
     void recarregar()

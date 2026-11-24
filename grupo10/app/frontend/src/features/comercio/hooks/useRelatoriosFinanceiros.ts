@@ -25,12 +25,14 @@ export function useRelatoriosFinanceiros(
   const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
+    setResumoLojas([])
+    setLojas([])
+    setRelatorio(null)
+    setConsultaAtiva(null)
+    setErro(null)
     if (!usuarioAtual || !papelAtivo) return
     let ativo = true
     setCarregando(true)
-    setErro(null)
-    setRelatorio(null)
-    setConsultaAtiva(null)
 
     const idLojaEscopo = papelAtivo === 'lojista' ? usuarioAtual.idLoja ?? undefined : undefined
 
