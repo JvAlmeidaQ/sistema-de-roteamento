@@ -129,7 +129,7 @@ Quando uma restrição do PostgreSQL é acionada, o driver JDBC retorna um códi
 |   `23505` (`unique_violation`)    | Violação de `PK` ou `UNIQUE`                   |       **409 Conflict**       | CPF, CNPJ ou e-mail já cadastrado; tentativa de avaliar o mesmo pedido duas vezes.                              |
 | `23503` (`foreign_key_violation`) | Violação de `FK` simples ou composta           | **422 Unprocessable Entity** | Item de produto pertencente a outra loja (`RN07`); endereço atual não pertencente ao cliente.                   |
 |    `23514` (`check_violation`)    | Violação de cláusula `CHECK`                   | **422 Unprocessable Entity** | Preço/quantidade `<= 0` (`RN09`), nota fora de `1..5` (`RN06`), soma incorreta no split (`RN05`).               |
-|         `23001` / `P0001`         | Exceção levantada por gatilho de imutabilidade |       **409 Conflict**       | Tentativa de `UPDATE`/`DELETE` em `Historico_Pedido`, `Historico_Entrega` (`RN08`) ou `Endereco` (`RR12`).      |
+|     `23514` / `23001` / `P0001`     | Exceção levantada por gatilho de imutabilidade |       **409 Conflict**       | Tentativa de `UPDATE`/`DELETE`/`TRUNCATE` em `Historico_Pedido`, `Historico_Entrega` (`RN08`) ou `Endereco` (`RR12`). |
 |    `P0001` (`raise_exception`)    | Regra de negócio violada em gatilho            | **422 Unprocessable Entity** | Rota já possui 2 entregas (`RN02`), transição de status inválida (`RR06`), avaliação antes da entrega (`RN13`). |
 |  `23502` (`not_null_violation`)   | Campo obrigatório ausente                      |     **400 Bad Request**      | Atributo `NOT NULL` omitido na requisição.                                                                      |
 
@@ -140,7 +140,7 @@ Quando uma restrição do PostgreSQL é acionada, o driver JDBC retorna um códi
 ## 4. Diretrizes de Verificação e Testes
 
 1. **Testes contra banco PostgreSQL real:** Regras baseadas em `CHECK`, FKs compostas e gatilhos não devem ser validadas em bancos em memória (como H2). Utilize o container **PostgreSQL 18** (`docker/compose.yaml` ou _Testcontainers_) executando os scripts oficiais (`01_esquema.sql` e `06_triggers.sql`).
-2. **Cobertura positiva e negativa por regra:** No script `03_verificacao.sql` e nos testes de integração da aplicação, cada regra da Seção 2 deve possuir ao menos um caso de sucesso e um caso que comprova a rejeição da operação inválida.
+2. **Cobertura positiva e negativa por regra:** Cubra as regras da Seção 2 com cenários positivos e negativos nos testes de integração. Na camada SQL, verifique restrições do esquema em `03_verificacao.sql` e gatilhos em `verificacao_dos_gatilhos.sql`.
 3. **Verificação no `COMMIT` para gatilhos adiados ([ADR-003](./adrs/ADR-003-especializacao-pessoa-cardinalidade-minima.md)):** Testes das restrições `DEFERRABLE INITIALLY DEFERRED` (`RR01` e, caso implementadas, as opcionais `RR16–RR19`) devem executar o `COMMIT` da transação para comprovar que a violação é detectada ao final da unidade de trabalho.
 4. **Teste de concorrência (`RN02`):** Ao menos um teste de integração deve simular duas transações simultâneas tentando alocar a 2ª vaga de uma mesma `Rota`, comprovando a eficácia do `SELECT ... FOR UPDATE`.
 

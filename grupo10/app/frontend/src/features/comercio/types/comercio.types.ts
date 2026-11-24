@@ -17,9 +17,10 @@ export type StatusPedido =
 export interface UsuarioSessao {
   idPessoa: number
   nome: string
-  email: string
+  email?: string
   perfilCliente: boolean
   perfilLojista: boolean
+  perfilEntregador?: boolean
   idLoja: number | null
   nomeLoja: string | null
 }

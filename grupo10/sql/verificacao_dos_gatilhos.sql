@@ -1,7 +1,7 @@
 -- =============================================================================
 -- VERIFICAÇÃO DOS GATILHOS — ENTREGA E6 (SEÇÃO 7.3)
 -- Pré-requisito: 01_esquema.sql, 02_carga.sql e 06_triggers.sql.
--- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística
+-- Ordem dos subdomínios: Identidade e Contato -> Comércio e Finanças -> Logística -> Auditoria
 -- (mesma sequência de 01_esquema.sql).
 -- Todos os testes rodam em transação com ROLLBACK ao final, preservando a carga.
 -- =============================================================================
@@ -338,6 +338,149 @@ BEGIN
     END IF;
 
     RAISE NOTICE 'PASSOU: verificação dos quatro gatilhos de Logística';
+END;
+$$;
+
+
+-- =============================================================================
+-- SUBDOMÍNIO: AUDITORIA
+-- =============================================================================
+
+DO $$
+DECLARE
+    v_ref_pedido        RECORD;
+    v_id_pedido         BIGINT;
+    v_id_entrega        BIGINT;
+    v_entregador        BIGINT;
+    v_rota              BIGINT;
+    v_qtd_hist_pedido   INTEGER;
+    v_qtd_hist_entrega  INTEGER;
+BEGIN
+    SELECT id_loja, id_cliente, id_endereco, forma_pagamento,
+           subtotal, taxa_entrega, taxa_servico, valor_total
+      INTO STRICT v_ref_pedido
+      FROM pedido
+     ORDER BY id_pedido
+     LIMIT 1;
+
+    -- 1) Caso permitido (RN04): gravação automática append-only em historico_pedido
+    -- e historico_entrega ao longo de todo o ciclo comercial e logístico.
+    INSERT INTO pedido (
+        id_loja, id_cliente, id_endereco, status, forma_pagamento,
+        subtotal, taxa_entrega, taxa_servico, valor_total
+    ) VALUES (
+        v_ref_pedido.id_loja, v_ref_pedido.id_cliente, v_ref_pedido.id_endereco,
+        'solicitado', v_ref_pedido.forma_pagamento,
+        v_ref_pedido.subtotal, v_ref_pedido.taxa_entrega, v_ref_pedido.taxa_servico, v_ref_pedido.valor_total
+    )
+    RETURNING id_pedido INTO v_id_pedido;
+
+    SELECT COUNT(*) INTO v_qtd_hist_pedido
+      FROM historico_pedido
+     WHERE id_pedido = v_id_pedido;
+
+    IF v_qtd_hist_pedido <> 1 THEN
+        RAISE EXCEPTION 'Falhou: criação do pedido não registrou status inicial em historico_pedido';
+    END IF;
+
+    -- Avança ciclo comercial até 'pronto' (dispara criação automática da entrega)
+    UPDATE pedido SET status = 'aceito' WHERE id_pedido = v_id_pedido;
+    UPDATE pedido SET status = 'pago' WHERE id_pedido = v_id_pedido;
+    UPDATE pedido SET status = 'em_preparacao' WHERE id_pedido = v_id_pedido;
+    UPDATE pedido SET status = 'pronto' WHERE id_pedido = v_id_pedido;
+
+    SELECT id_entrega INTO STRICT v_id_entrega
+      FROM entrega
+     WHERE id_pedido = v_id_pedido;
+
+    -- Avança ciclo logístico até 'entregue' (conclui o pedido em cascata)
+    SELECT id_pessoa INTO STRICT v_entregador FROM entregador ORDER BY id_pessoa LIMIT 1;
+    INSERT INTO rota (id_entregador) VALUES (v_entregador) RETURNING id_rota INTO v_rota;
+
+    UPDATE entrega SET status = 'aceita', id_rota = v_rota WHERE id_entrega = v_id_entrega;
+    UPDATE entrega SET status = 'a_caminho' WHERE id_entrega = v_id_entrega;
+    UPDATE entrega SET status = 'entregue' WHERE id_entrega = v_id_entrega;
+
+    -- Regravar o mesmo status não deve duplicar eventos em historico_pedido nem historico_entrega.
+    UPDATE pedido SET status = status WHERE id_pedido = v_id_pedido;
+    UPDATE entrega SET status = status WHERE id_entrega = v_id_entrega;
+
+    SELECT COUNT(*) INTO v_qtd_hist_pedido
+      FROM historico_pedido
+     WHERE id_pedido = v_id_pedido;
+
+    SELECT COUNT(*) INTO v_qtd_hist_entrega
+      FROM historico_entrega
+     WHERE id_entrega = v_id_entrega;
+
+    IF v_qtd_hist_pedido <> 6 OR v_qtd_hist_entrega <> 4 THEN
+        RAISE EXCEPTION 'Falhou: trilha automática incompleta (pedido=%, entrega=%)',
+            v_qtd_hist_pedido, v_qtd_hist_entrega;
+    END IF;
+
+    -- 2) Caso barrado (RN08/RR11): UPDATE em linha de historico_pedido.
+    -- Esperado: SQLSTATE 23514 (ck_historico_pedido_imutavel).
+    BEGIN
+        UPDATE historico_pedido
+           SET data_hora = CURRENT_TIMESTAMP + INTERVAL '1 hour'
+         WHERE id_pedido = v_id_pedido
+           AND status = 'solicitado';
+        RAISE EXCEPTION 'Falhou: UPDATE em historico_pedido foi aceito';
+    EXCEPTION
+        WHEN check_violation THEN
+            RAISE NOTICE 'BARRADO (esperado - RN08/RR11 UPDATE historico_pedido): %', SQLERRM;
+    END;
+
+    -- 3) Caso barrado (RN08/RR11): DELETE em linha de historico_pedido.
+    -- Esperado: SQLSTATE 23514 (ck_historico_pedido_imutavel).
+    BEGIN
+        DELETE FROM historico_pedido
+         WHERE id_pedido = v_id_pedido
+           AND status = 'solicitado';
+        RAISE EXCEPTION 'Falhou: DELETE em historico_pedido foi aceito';
+    EXCEPTION
+        WHEN check_violation THEN
+            RAISE NOTICE 'BARRADO (esperado - RN08/RR11 DELETE historico_pedido): %', SQLERRM;
+    END;
+
+    -- 4) Caso barrado (RN08/RR11): UPDATE em linha de historico_entrega.
+    -- Esperado: SQLSTATE 23514 (ck_historico_entrega_imutavel).
+    BEGIN
+        UPDATE historico_entrega
+           SET data_hora = CURRENT_TIMESTAMP + INTERVAL '1 hour'
+         WHERE id_entrega = v_id_entrega
+           AND status = 'aguardando_entregador';
+        RAISE EXCEPTION 'Falhou: UPDATE em historico_entrega foi aceito';
+    EXCEPTION
+        WHEN check_violation THEN
+            RAISE NOTICE 'BARRADO (esperado - RN08/RR11 UPDATE historico_entrega): %', SQLERRM;
+    END;
+
+    -- 5) Caso barrado (RN08/RR11): DELETE em linha de historico_entrega.
+    -- Esperado: SQLSTATE 23514 (ck_historico_entrega_imutavel).
+    BEGIN
+        DELETE FROM historico_entrega
+         WHERE id_entrega = v_id_entrega
+           AND status = 'aguardando_entregador';
+        RAISE EXCEPTION 'Falhou: DELETE em historico_entrega foi aceito';
+    EXCEPTION
+        WHEN check_violation THEN
+            RAISE NOTICE 'BARRADO (esperado - RN08/RR11 DELETE historico_entrega): %', SQLERRM;
+    END;
+
+    -- 6) Caso barrado (RN08/RR11 - FOR EACH STATEMENT): comando UPDATE em lote
+    -- bloqueado mesmo quando nenhuma linha satisfaz o filtro WHERE.
+    BEGIN
+        UPDATE historico_pedido
+           SET data_hora = data_hora
+         WHERE FALSE;
+        RAISE EXCEPTION 'Falhou: UPDATE em nível de instrução em historico_pedido foi aceito';
+    EXCEPTION
+        WHEN check_violation THEN
+            RAISE NOTICE 'BARRADO (esperado - RN08/RR11 STATEMENT historico_pedido): %', SQLERRM;
+    END;
+
+    RAISE NOTICE 'PASSOU: verificação dos gatilhos de Auditoria (RN04, RN08, RR11)';
 END;
 $$;
 

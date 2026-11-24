@@ -3,6 +3,7 @@
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Comércio e Finanças
  */
+import { Link } from 'react-router-dom'
 import type { AvaliacaoFormValues } from '../schemas/comercio.schemas'
 import type { PedidoResponse } from '../types/comercio.types'
 import { AvaliacaoPedidoForm } from './AvaliacaoPedidoForm'
@@ -49,6 +50,13 @@ export function DetalhesPedidoPanel({
         </div>
         <StatusBadge status={pedido.status} />
       </div>
+
+      <Link
+        to={`/rastreio/${pedido.idPedido}`}
+        className="inline-flex min-h-11 items-center rounded-sm text-sm font-semibold text-brand-dark underline underline-offset-4 hover:text-brand-outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-outline"
+      >
+        Ver rastreio
+      </Link>
 
       <div className="space-y-1 rounded-2xl bg-surface-bg/50 p-3 text-xs">
         <p>

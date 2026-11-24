@@ -5,7 +5,9 @@
 Avaliar o impacto dos índices secundários definidos em `07_indices.sql` sobre a **base oficial consolidada da E4** (`01_esquema.sql` + `02_carga.sql`) no PostgreSQL 18 (Docker), comparando os planos de execução via `EXPLAIN (ANALYZE, BUFFERS)` **antes** e **depois** da criação dos índices e após `ANALYZE`.
 
 - **Volume da base oficial (`02_carga.sql`):**
+  - `historico_pedido`: **656.757** linhas
   - `pedido`: **200.000** linhas
+  - `historico_entrega`: **137.220** linhas
   - `entrega`: **51.315** linhas
   - `rota`: **14.366** linhas
   - `telefone`: **495** linhas
@@ -20,6 +22,8 @@ Avaliar o impacto dos índices secundários definidos em `07_indices.sql` sobre 
 | Consulta 5 (lojas com pedidos concluídos em todas as formas de pagamento — Comércio e Finanças) | `pedido`: 200.000 | 44,172 ms | 3,538 ms | Parallel Seq Scan + Seq Scan em `pedido` | Index Only Scan (`idx_pedido_concluido_loja_forma`) em `pedido` |
 | Consulta 9 (pedido concluído de maior valor total — Comércio e Finanças) | `pedido`: 200.000 | 282,066 ms | 206,142 ms | Parallel Index Scan (`pk_pedido`) + Seq Scan em `pedido p2` | Bitmap Index Scan + Index Only Scan (`idx_pedido_concluido_valor_total`) |
 | Consulta 17 (entregadores com entregas ativas atrasadas — Logística) | `entrega`: 51.315 / `rota`: 14.366 | 5,384 ms | 2,644 ms | Seq Scan em `entrega` | Bitmap Index Scan (`idx_entrega_ativa_previsao_pedido`) + Bitmap Heap Scan em `entrega` |
+| Consulta 20 (pedidos aceitos sem registro de pagamento — Auditoria) | `historico_pedido`: 656.757 | 72,005 ms | 61,438 ms | Parallel Seq Scan em `historico_pedido` (`hp_pago`) | Bitmap Index Scan (`idx_historico_pedido_status_data_hora`) + Parallel Bitmap Heap Scan |
+| Consulta 21 (entregas concluídas após a previsão — Auditoria) | `historico_entrega`: 137.220 / `entrega`: 51.315 | 14,705 ms | 12,189 ms | Seq Scan em `historico_entrega` | Bitmap Index Scan (`idx_historico_entrega_status_data_hora`) + Bitmap Heap Scan |
 | Consulta de teste — índice não utilizado (`telefone` por `tipo = 'celular'` — Identidade) | `telefone`: 495 | 0,269 ms | 0,065 ms | Seq Scan em `telefone` | Seq Scan em `telefone` (`idx_telefone_tipo` ignorado) |
 
 ---
@@ -72,7 +76,17 @@ Execution Time: 3.538 ms
 
 ---
 
-### 3.4 Caso em que o índice criado NÃO é utilizado (Identidade e Contato)
+### 3.4 Consultas 20 e 21 — Trilha Cronológica e SLA de Entregas (Auditoria)
+
+- **Índices envolvidos:** `idx_historico_pedido_status_data_hora` em `historico_pedido(status, data_hora)` e `idx_historico_entrega_status_data_hora` em `historico_entrega(status, data_hora)`.
+- **O que mudou no plano:**
+  - **Consulta 20 (`historico_pedido`: 656.757 linhas):** antes realizava `Parallel Seq Scan` em `historico_pedido` para ambos os lados do anti-join (`72,005 ms`, custo `28961.24`). Com o índice, a leitura de `hp_pago` passou para `Bitmap Index Scan using idx_historico_pedido_status_data_hora` + `Parallel Bitmap Heap Scan` (`61,438 ms`, custo `28777.46`).
+  - **Consulta 21 (`historico_entrega`: 137.220 linhas):** antes executava `Seq Scan on historico_entrega he` (`14,705 ms`, custo `4749.62`). Com o índice, mudou para `Bitmap Index Scan using idx_historico_entrega_status_data_hora` + `Bitmap Heap Scan` (`12,189 ms`, custo `4061.41`).
+- **Custo estimado vs. tempo real:** como os filtros `status = 'pago'` (114.062 linhas) e `status = 'entregue'` (28.539 linhas) selecionam uma fração significativa das tabelas históricas, o otimizador escolhe `Bitmap Index Scan` em vez de `Index Scan` puro, reduzindo o tempo real em ~15% e ~17%, respectivamente.
+
+---
+
+### 3.5 Caso em que o índice criado NÃO é utilizado (Identidade e Contato)
 
 - **Consulta medida:**
   ```sql
