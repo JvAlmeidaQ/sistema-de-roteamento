@@ -1,24 +1,20 @@
-name: Validacao de Scripts SQL
+name: Validacao do Banco e Build
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ develop, main ]
-    paths:
-      - 'grupo10/sql/**'
-      - '.github/workflows/ci.yml'
+    branches: [ release/es, develop, main ]
   push:
-    branches: [ develop ]
-    paths:
-      - 'grupo10/sql/**'
-      - '.github/workflows/ci.yml'
+    branches: [ release/es, develop ]
 
 jobs:
   test-database:
+    name: Validacao Banco e Backend
     runs-on: ubuntu-latest
-
     env:
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      DB_URL: jdbc:postgresql://localhost:5432/roteamento_db
     services:
       postgres:
         image: postgres:18
@@ -41,43 +37,76 @@ jobs:
       - name: Instalar postgresql-client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Testar 01_esquema.sql (DDL)
-        run: |
-          if [ -s grupo10/sql/01_esquema.sql ]; then
-            psql \
-              -h localhost \
-              -U sistemaRoteamento \
-              -d roteamento_db \
-              -v ON_ERROR_STOP=1 \
-              -f grupo10/sql/01_esquema.sql
-          else
-            echo "01_esquema.sql não encontrado ou está vazio."
-            exit 1
-          fi
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
 
-      - name: Testar 02_carga.sql
+      - name: Verificar existência dos scripts
         run: |
-          if [ -s grupo10/sql/02_carga.sql ]; then
-            psql \
-              -h localhost \
-              -U sistemaRoteamento \
-              -d roteamento_db \
-              -v ON_ERROR_STOP=1 \
-              -f grupo10/sql/02_carga.sql
-          else
-            echo "02_carga.sql não encontrado ou está vazio."
-            exit 1
-          fi
+          for f in 01_esquema 02_carga 03_verificacao 04_consultas 05_visoes 06_triggers 07_indices verificacao_dos_gatilhos; do
+            if [ ! -s "grupo10/sql/$f.sql" ]; then
+              echo "$f.sql não encontrado ou está vazio."
+              exit 1
+            fi
+          done
+
+      # Flyway aplica as migrações 01, 02 e 05 a 07 antes de gerar o código jOOQ e rodar os testes.
+      - name: Build (Flyway + jOOQ + testes)
+        working-directory: grupo10/app/backend
+        run: mvn -B verify -Ddb.url=jdbc:postgresql://localhost:5432/roteamento_db
 
       - name: Testar 03_verificacao.sql
         run: |
-          if [ -s grupo10/sql/03_verificacao.sql ]; then
-            psql \
-              -h localhost \
-              -U sistemaRoteamento \
-              -d roteamento_db \
-              -f grupo10/sql/03_verificacao.sql
-          else
-            echo "03_verificacao.sql não encontrado ou está vazio."
-            exit 1
-          fi
+          psql \
+            -h localhost \
+            -U sistemaRoteamento \
+            -d roteamento_db \
+            -f grupo10/sql/03_verificacao.sql
+
+      - name: Testar verificacao_dos_gatilhos.sql
+        run: |
+          psql \
+            -h localhost \
+            -U sistemaRoteamento \
+            -d roteamento_db \
+            -v ON_ERROR_STOP=1 \
+            -f grupo10/sql/verificacao_dos_gatilhos.sql
+
+      - name: Testar 04_consultas.sql
+        run: |
+          psql \
+            -h localhost \
+            -U sistemaRoteamento \
+            -d roteamento_db \
+            -v ON_ERROR_STOP=1 \
+            -o /dev/null \
+            -f grupo10/sql/04_consultas.sql
+
+  build-frontend:
+    name: Build Frontend (full e bd)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: grupo10/app/frontend/package-lock.json
+
+      - name: Instalar dependências
+        working-directory: grupo10/app/frontend
+        run: npm ci
+
+      - name: Validar TypeScript e Build ES (full)
+        working-directory: grupo10/app/frontend
+        run: npm run build
+
+      - name: Validar TypeScript e Build BD (bd)
+        working-directory: grupo10/app/frontend
+        run: npm run build:bd

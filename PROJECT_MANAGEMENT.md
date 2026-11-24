@@ -13,12 +13,12 @@ Este documento reúne o modelo de trabalho, o cronograma, os critérios de quali
 | **E0** (BD)      | 10/09 | Equipe e tema aprovado _(Concluído)_                                                                                                       |
 | **E1** (BD)      | 24/09 | Requisitos e regras de negócio (Seções 1 e 2) _(Concluído)_                                                                                |
 | **E2** (BD)      | 16/10 | DER, modelo lógico e normalização (Seção 3) _(Concluído)_                                                                                  |
-| **E3** (BD)      | 08/11 | Consultas em álgebra relacional (Seção 4).                                                                                                 |
-| **E4** (BD)      | 13/11 | DDL, carga (200k+ linhas) e verificação (Seção 5).                                                                                         |
-| **Marco 1** (ES) | 20/11 | **[Antecipa E6]** Gatilhos de limite e imutabilidade. **[ES]** Setup Backend (Spring Boot + jOOQ), Controllers e Services de cada domínio. |
-| **Marco 2** (ES) | 21/11 | **[Antecipa E5]** Consultas SQL e Visões para relatórios. **[ES]** Setup Frontend (React), telas integradas à API e painéis.               |
-| **Marco 3** (ES) | 23/11 | **[ES]** Redação do documento-texto (DOCX) com os 3 temas teóricos e elaboração dos slides (PDF).                                          |
-| **Final** (ES)   | 24/11 | **Entrega Final de ES**. Código-fonte congelado na branch `release/es`, DOCX e Slides submetidos no Classroom.                             |
+| **E3** (BD)      | 08/11 | Consultas em álgebra relacional (Seção 4) _(Concluído)_.                                                                                  |
+| **E4** (BD)      | 13/11 | DDL, carga (200k+ linhas) e verificação (Seção 5) _(Concluído)_.                                                                          |
+| **Marco 1** (ES) | 20/11 | **[Antecipa E6]** Gatilhos de limite e imutabilidade. **[ES]** Setup Backend (Spring Boot + jOOQ), Controllers e Services de cada domínio _(Concluído)_. |
+| **Marco 2** (ES) | 21/11 | **[Antecipa E5]** Consultas SQL e Visões para relatórios. **[ES]** Setup Frontend (React), telas integradas à API e painéis _(Concluído)_. |
+| **Marco 3** (ES) | 23/11 | **[ES]** Redação do documento final (`Doc_Engenharia_de_Software.pdf`) e primeira versão dos slides (`Apresentacao_ES_Grupo10.pptx`) _(Concluído)_. |
+| **Final** (ES)   | 24/11 | **Entrega Final de ES** _(Concluído)_. Código consolidado em `release/es`, promovido para `main` (`v2.0.0-es-final`), com documento e slides versionados. |
 | **E5** (BD)      | 29/11 | Consultas SQL e visões (Seções 6 e 7.1). _(Empacotamento do SQL já criado no Marco 2 na branch `release/bd`)_.                             |
 | **E6** (BD)      | 06/12 | Gatilhos, índices e relatório consolidado (Seções 7.2, 7.3, 8 e 9). _(Adição de índices e formatação do PDF final)_.                       |
 
@@ -28,10 +28,7 @@ Este documento reúne o modelo de trabalho, o cronograma, os critérios de quali
 
 - **Metodologia:** desenvolvimento iterativo e incremental, guiado pelos marcos da tabela acima. Não há sprints de duração fixa.
 - **Gestão de tarefas:** todas as atividades são mapeadas como cartões no **GitHub Projects** da equipe. Hoje os cartões são Drafts e serão convertidos em Issues quando o grupo julgar adequado.
-- **Rastreabilidade de commits:** cada commit e Pull Request referencia a issue correspondente do Backlog.
-  - Padrão: `tipo(escopo): descrição [#CARD-XX]`
-  - Exemplo: `feat(ddl): implementa constraints de preco_unitario [#CARD-08]`
-  - Após a conversão dos cartões em Issues, passa-se a referenciar o número da Issue (`#N`).
+- **Rastreabilidade de commits e PRs:** os commits seguem o padrão Conventional Commits (`tipo(escopo): descrição`, ex.: `feat(ddl): implementa constraints de preco_unitario`). O vínculo rastreável com a tarefa (`#N` da Issue) deve constar obrigatoriamente no título ou na descrição do Pull Request, podendo ser incluído opcionalmente na mensagem de commit.
 
 ---
 
@@ -72,9 +69,10 @@ Uma tarefa só vai para `Concluído`, e seu Pull Request só entra em `develop`,
 
 ### 5.1. Política de Branches
 
-- `main`: contém somente versões consolidadas para entrega oficial de Engenharia de Software.
-- `main-bd`: ramo de trabalho oficial para as etapas de Banco de Dados após a entrega de Engenharia de Software.
+- `main`: contém somente versões consolidadas das entregas oficiais.
 - `develop`: ramo de integração do time.
+- `release/bd`: ramo de trabalho oficial para consolidação das etapas de Banco de Dados (DCC060).
+- `release/es`: ramo de trabalho oficial para consolidação da entrega de Engenharia de Software (DCC061).
 - `feature/<nome-da-tarefa>`: branches temporárias criadas a partir de `develop`, uma por tarefa.
 
 **Fluxo de integração:** o autor faz o merge da feature em `develop` após a aprovação do PR e a execução bem-sucedida do CI. A promoção de `develop` para `main` ocorre somente na entrega de um marco, por meio de Pull Request. A tag correspondente é criada sobre o commit de merge em `main`.
@@ -117,7 +115,7 @@ Cada Release oficial deve conter:
 2. **Relatório:** arquivo `relatorio.pdf` correspondente à entrega.
 3. **Código-fonte:** arquivo `grupoNN.zip`, gerado pelo script oficial de submissão.
 
-Os assets da Release devem representar exatamente o estado do projeto correspondente à tag, permitindo que os avaliadores obtenham os artefatos da entrega sem depender de compilações ou preparações manuais adicionais.
+Os assets da Release devem representar exatamente o estado do projeto correspondente à tag, permitindo que os avaliadores obtenham os artefatos da entrega sem depender de compilações ou preparações manuais adicionais. Na entrega oficial de Engenharia de Software (`v2.0.0-es-final`), os assets anexados à Release são `docs/es/Doc_Engenharia_de_Software.pdf` e `docs/es/Apresentacao_ES_Grupo10.pptx`.
 
 ---
 
@@ -126,3 +124,25 @@ Os assets da Release devem representar exatamente o estado do projeto correspond
 - **Comunicação:** o canal oficial da equipe é o grupo do WhatsApp.
 - **Revisão de PR:** prazo máximo de **2 dias** para o primeiro retorno do revisor. Se o prazo estourar, o autor avisa no grupo e outro integrante assume a revisão.
 - **Autonomia:** cada integrante pode pegar tarefas que estejam em `A Fazer`, desde que registre o responsável no cartão antes de começar.
+
+---
+
+## 7. Riscos e Impedimentos da Reta Final
+
+| Risco / Impedimento | Impacto | Responsável | Ação Imediata |
+| :--- | :--- | :--- | :--- |
+| **Implementação das features a partir do scaffold atual** _(Mitigado)_ | Atraso na integração ponta a ponta (Backend + Frontend) para os Marcos 1 e 2 | Responsáveis de cada subdomínio (`#15` a `#19`) | Concluído: 5 subdomínios integrados ponta a ponta (Identidade, Catálogo, Comércio/Finanças, Logística e Auditoria) em `release/es` e promovidos para `main` |
+| **Ausência de suíte de testes em `grupo10/app/backend/src/test/`** _(Mitigado)_ | Regressões não detectadas na API e nas regras de negócio da camada de aplicação | Autores das features + revisor do PR | Concluído: 7 suítes com 56 testes de integração JUnit 5 + MockMvc contra PostgreSQL 18 real executando no `mvn verify` |
+| **Alinhamento entre `release/bd` e `release/es`** _(Mitigado)_ | Divergência de scripts SQL (`01`–`03`) ou quebra no empacotamento final | Responsável de integração / SCM | Scripts SQL base e entrega ES sincronizados; ajustes pontuais remanescentes de BD isolados no subdomínio de Catálogo (`feature/catalogo`) |
+| **Pendências de *issues* abertas** _(Mitigado)_ | Perda de rastreabilidade e itens de entregas anteriores ainda abertos (`#12`, `#13`, épicos) | Toda a equipe | Issues de ES (`#21`, `#22`, `#23`, `#33`) vinculadas e encerradas na promoção oficial para `main` |
+| **Ausência de *branch protection* automática** | Risco de *push* direto ou *merge* sem revisão/CI verde em `main`, `develop` e `release/es` | Admin do repositório (`JvAlmeidaQ`) | Manter disciplina estrita de PRs com checklist do DoD e, se possível, ativar proteção básica exigindo `ci.yml` |
+| **Gestão do tempo de apresentação (15 a 20 min)** | Extrapolação do limite ou corte de tópicos teóricos/demonstração | Toda a equipe | Ensaiar a apresentação cronometrada dividindo claramente os blocos (teoria, arquitetura/SCM e demo ao vivo) |
+
+---
+
+## 8. Checklist de Encerramento / DoD Final (DCC061)
+
+- [x] **Documento-texto (`Doc_Engenharia_de_Software.pdf`):** redação consolidada dos 3 temas teóricos e impactos de IA revisada, exportada e versionada em `docs/es/`.
+- [x] **Código e repositório alinhados:** funcionalidades integradas em `release/es`, promovidas para `main` (`v2.0.0-es-final`), *issues* correspondentes fechadas, `matriz_rastreabilidade.md` atualizada e pipeline `.github/workflows/ci.yml` verde (restando apenas ajustes pontuais de BD em consultas/gatilhos do subdomínio de Catálogo na `feature/catalogo`).
+- [x] ***Slides* (`Apresentacao_ES_Grupo10.pptx` — v1):** deck inicial versionado e rastreado em `docs/es/`, alinhado ao documento e à demonstração do sistema.
+- [ ] **Apresentação (15 a 20 min):** roteiro definido por integrante e ensaio cronometrado concluído antes da submissão final (24/11).

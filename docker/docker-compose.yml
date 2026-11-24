@@ -11,10 +11,15 @@ services:
       - "5433:5432"
       #PostgreSQL local: localhost:5432 vs PostgreSQL Docker: localhost:5433
     volumes:
-      - postgres_data:/var/lib/postgresql
-      # Agora apenas os arquivos 01 e 02 são executados quando o banco é criado, ou demais devem subir na mão
-      - ../grupo10/sql/01_esquema.sql:/docker-entrypoint-initdb.d/01_esquema.sql:ro
-      - ../grupo10/sql/02_carga.sql:/docker-entrypoint-initdb.d/02_carga.sql:ro
+      - postgres_data:/var/lib/postgresql   # Postgres 18+: sem /data no final
+      # Somente leitura, para execução manual (ex.: psql -f /sql/03_verificacao.sql).
+      # Não usar initdb.d: a partir da sprint 2 o Flyway aplica 01 e 02.
+      - ../grupo10/sql:/sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sistemaRoteamento -d roteamento_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:

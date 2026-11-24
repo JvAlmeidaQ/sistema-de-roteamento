@@ -1,0 +1,231 @@
+/**
+ * Disciplina: DCC061 (Engenharia de Software)
+ * Feature Flag: VITE_APP_MODE=full (!isBd)
+ * Subdomínio: Catálogo
+ */
+import { Check, Plus, X } from 'lucide-react'
+import { useEffect } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { produtoSchema, type ProdutoFormValues } from '../schemas/catalogo.schemas'
+import type { CategoriaResponse, ProdutoCatalogoResponse } from '../types/catalogo.types'
+
+interface FormProdutoModalProps {
+  aberto: boolean
+  onFechar: () => void
+  onSalvar: (valores: ProdutoFormValues) => Promise<boolean>
+  produtoParaEditar?: ProdutoCatalogoResponse | null
+  categoriasDisponiveis: CategoriaResponse[]
+  salvando: boolean
+}
+
+export function FormProdutoModal({
+  aberto,
+  onFechar,
+  onSalvar,
+  produtoParaEditar,
+  categoriasDisponiveis,
+  salvando,
+}: FormProdutoModalProps) {
+  const isEdicao = !!produtoParaEditar
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<ProdutoFormValues>({
+    resolver: zodResolver(produtoSchema),
+    defaultValues: {
+      nome: '',
+      descricao: '',
+      preco: 0,
+      categoriasIds: [],
+    },
+  })
+
+  const categoriasSelecionadas = watch('categoriasIds') || []
+
+  useEffect(() => {
+    if (!aberto) return
+    if (produtoParaEditar) {
+      reset({
+        nome: produtoParaEditar.nome,
+        descricao: produtoParaEditar.descricao || '',
+        preco: produtoParaEditar.preco,
+        categoriasIds: produtoParaEditar.categorias.map((c) => c.idCategoria),
+      })
+    } else {
+      reset({
+        nome: '',
+        descricao: '',
+        preco: Number.NaN,
+        categoriasIds: categoriasDisponiveis.length > 0 ? [categoriasDisponiveis[0].idCategoria] : [],
+      })
+    }
+  }, [aberto, produtoParaEditar, categoriasDisponiveis, reset])
+
+  useEffect(() => {
+    if (!aberto) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !salvando) onFechar()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [aberto, salvando, onFechar])
+
+  if (!aberto) return null
+
+  const toggleCategoria = (idCat: number) => {
+    const jaSelecionada = categoriasSelecionadas.includes(idCat)
+    if (jaSelecionada) {
+      setValue(
+        'categoriasIds',
+        categoriasSelecionadas.filter((id) => id !== idCat),
+        { shouldValidate: true }
+      )
+    } else {
+      setValue('categoriasIds', [...categoriasSelecionadas, idCat], {
+        shouldValidate: true,
+      })
+    }
+  }
+
+  const onSubmit = async (data: ProdutoFormValues) => {
+    const sucesso = await onSalvar(data)
+    if (sucesso) onFechar()
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/40 p-4 backdrop-blur-xs"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-produto-titulo"
+    >
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-surface-bg bg-surface p-6 shadow-hover transition-all">
+        <div className="flex items-center justify-between border-b border-surface-bg pb-3">
+          <h3 id="modal-produto-titulo" className="font-display text-lg font-semibold text-brand-dark">
+            {isEdicao ? 'Editar produto' : 'Novo produto'}
+          </h3>
+          <button
+            type="button"
+            onClick={onFechar}
+            aria-label="Fechar modal"
+            className="rounded-full p-1.5 text-text-default hover:bg-surface-bg hover:text-brand-dark"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-4 space-y-4">
+          <div>
+            <label htmlFor="prod-nome" className="block text-xs font-semibold text-brand-dark">
+              Nome do Produto *
+            </label>
+            <input
+              id="prod-nome"
+              type="text"
+              placeholder="Ex: X-Salada Especial, Pizza Média..."
+              {...register('nome')}
+              className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
+            />
+            {errors.nome && (
+              <p className="mt-1 text-xs text-state-error">{errors.nome.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="prod-desc" className="block text-xs font-semibold text-brand-dark">
+              Descrição (opcional)
+            </label>
+            <textarea
+              id="prod-desc"
+              rows={2}
+              placeholder="Ingredientes, porção, detalhes..."
+              {...register('descricao')}
+              className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
+            />
+            {errors.descricao && (
+              <p className="mt-1 text-xs text-state-error">{errors.descricao.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="prod-preco" className="block text-xs font-semibold text-brand-dark">
+              Preço unitário (R$) *
+            </label>
+            <input
+              id="prod-preco"
+              type="number"
+              step="0.01"
+              min="0.01"
+              placeholder="0.00"
+              {...register('preco', { valueAsNumber: true })}
+              className="mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
+            />
+            {errors.preco && (
+              <p className="mt-1 text-xs text-state-error">{errors.preco.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-brand-dark">
+              Categorias * <span className="text-[11px] font-normal text-text-default">(selecione ao menos uma)</span>
+            </label>
+            {categoriasDisponiveis.length === 0 ? (
+              <p className="mt-1 rounded-xl bg-state-pending/10 p-2 text-xs text-brand-pit">
+                Nenhuma categoria cadastrada. Crie uma categoria na aba correspondente antes de cadastrar produtos.
+              </p>
+            ) : (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {categoriasDisponiveis.map((cat) => {
+                  const ativa = categoriasSelecionadas.includes(cat.idCategoria)
+                  return (
+                    <button
+                      key={cat.idCategoria}
+                      type="button"
+                      aria-pressed={ativa}
+                      onClick={() => toggleCategoria(cat.idCategoria)}
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                        ativa
+                          ? 'border border-brand-green/40 bg-brand-lime text-brand-dark'
+                          : 'border border-transparent bg-surface-bg/70 text-text-default hover:bg-surface-bg'
+                      }`}
+                    >
+                      {ativa ? <Check className="h-3.5 w-3.5" aria-hidden="true" /> : <Plus className="h-3.5 w-3.5" aria-hidden="true" />}
+                      {cat.nome}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            {errors.categoriasIds && (
+              <p className="mt-1 text-xs text-state-error">{errors.categoriasIds.message}</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-surface-bg pt-4">
+            <button
+              type="button"
+              onClick={onFechar}
+              disabled={salvando}
+              className="rounded-full px-4 py-2 text-xs font-semibold text-text-default hover:bg-surface-bg"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={salvando || categoriasDisponiveis.length === 0}
+              className="rounded-full bg-brand-lime px-6 py-2 text-xs font-semibold text-brand-dark shadow-low transition-all hover:bg-brand-green/30 disabled:opacity-50"
+            >
+              {salvando ? 'Salvando...' : isEdicao ? 'Salvar Alterações' : 'Cadastrar Produto'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}

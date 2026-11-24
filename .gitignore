@@ -4,15 +4,17 @@ Thumbs.db
 
 # Arquivo de backup
 justificativas.tex
-grupo10/.$modelo_sistema_roteamento.drawio.bkp
+*.bkp
+.$*
 
 # Ambientes locais e containers
+target/
 .env
+.env.local
+.env.*.local
 docker/pgdata/
-
-# Pastas de dev enquanto não é a hora
-frontend
-backend
+**/pgdata/
+grupo10/app/backend/src/main/resources/static/
 
 # Artefatos e builds
 *.zip
@@ -20,6 +22,9 @@ dist/
 build/
 __pycache__/
 *.pyc
+
+# Node modules
+node_modules/
 
 # IDEs
 .vscode/
