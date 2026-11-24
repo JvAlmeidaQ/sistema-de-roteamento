@@ -4,8 +4,10 @@
  */
 package br.ufjf.dcc.entregas.features.comercio.service;
 
+import br.ufjf.dcc.entregas.core.exception.AcessoNegadoException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
+import br.ufjf.dcc.entregas.core.security.AdminAccessService;
 import br.ufjf.dcc.entregas.features.comercio.dto.ConsultaEstrategicaResponse;
 import br.ufjf.dcc.entregas.features.comercio.dto.PedidoResponse;
 import br.ufjf.dcc.entregas.features.comercio.dto.RelatorioPedidosLojaResponse;
@@ -27,19 +29,37 @@ public class RelatorioComercioService {
     private final RelatorioComercioRepository relatorioRepository;
     private final PedidoRepository pedidoRepository;
     private final PedidoService pedidoService;
+    private final AdminAccessService adminAccessService;
 
     public RelatorioComercioService(
             RelatorioComercioRepository relatorioRepository,
             PedidoRepository pedidoRepository,
-            PedidoService pedidoService
+            PedidoService pedidoService,
+            AdminAccessService adminAccessService
     ) {
         this.relatorioRepository = relatorioRepository;
         this.pedidoRepository = pedidoRepository;
         this.pedidoService = pedidoService;
+        this.adminAccessService = adminAccessService;
     }
 
-    public List<ResumoFinanceiroLojaResponse> listarResumoFinanceiroLojas(Long idLoja) {
-        return relatorioRepository.listarResumoFinanceiroLojas(idLoja);
+    public List<ResumoFinanceiroLojaResponse> listarResumoFinanceiroLojas(Long idUsuarioAutenticado, Long idLoja) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+        if (adminAccessService.isAdmin(idUsuarioAutenticado)) {
+            return relatorioRepository.listarResumoFinanceiroLojas(idLoja);
+        }
+
+        List<Long> idsLojasDoLojista = relatorioRepository.buscarIdsLojasDoLojista(idUsuarioAutenticado);
+        if (idsLojasDoLojista.isEmpty()) {
+            throw new AcessoNegadoException("Acesso restrito a lojistas ou administradores.");
+        }
+        if (idLoja != null) {
+            if (!idsLojasDoLojista.contains(idLoja)) {
+                throw new AcessoNegadoException("Você só pode consultar o resumo financeiro da sua própria loja.");
+            }
+            return relatorioRepository.listarResumoFinanceiroLojas(idLoja);
+        }
+        return relatorioRepository.listarResumoFinanceiroLojasPorIds(idsLojasDoLojista);
     }
 
     public RelatorioPedidosLojaResponse gerarRelatorioLoja(
@@ -50,18 +70,24 @@ public class RelatorioComercioService {
             OffsetDateTime dataFim,
             int limit
     ) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+
         if (dataInicio != null && dataFim != null && dataInicio.isAfter(dataFim)) {
             throw new RequisicaoInvalidaException("A data inicial não pode ser posterior à data final.");
         }
 
         var loja = pedidoRepository.buscarLoja(idLoja)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Loja " + idLoja + " não encontrada."));
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Loja não encontrada."));
+
+        if (!adminAccessService.isAdmin(idUsuarioAutenticado) && !loja.getIdLojista().equals(idUsuarioAutenticado)) {
+            throw new AcessoNegadoException("Você só pode consultar relatórios da sua própria loja.");
+        }
 
         StatusPedido status = null;
         if (statusLiteral != null && !statusLiteral.isBlank()) {
             status = StatusPedido.lookupLiteral(statusLiteral);
             if (status == null) {
-                throw new RequisicaoInvalidaException("Status de pedido inválido: " + statusLiteral);
+                throw new RequisicaoInvalidaException("Status de pedido inválido.");
             }
         }
 
@@ -80,10 +106,20 @@ public class RelatorioComercioService {
         );
     }
 
-    public ConsultaEstrategicaResponse executarConsultaEstrategica(int numero) {
+    public ConsultaEstrategicaResponse executarConsultaEstrategica(Long idUsuarioAutenticado, int numero) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
         if (numero < 5 || numero > 12) {
-            throw new RequisicaoInvalidaException("As consultas do subdomínio Comércio e Finanças vão de 5 a 12.");
+            throw new RequisicaoInvalidaException("Consulta gerencial inválida.");
         }
-        return relatorioRepository.executarConsultaEstrategica(numero);
+
+        if (adminAccessService.isAdmin(idUsuarioAutenticado)) {
+            return relatorioRepository.executarConsultaEstrategica(numero, null);
+        }
+
+        List<Long> idsLojasDoLojista = relatorioRepository.buscarIdsLojasDoLojista(idUsuarioAutenticado);
+        if (idsLojasDoLojista.isEmpty()) {
+            throw new AcessoNegadoException("Acesso restrito a lojistas ou administradores.");
+        }
+        return relatorioRepository.executarConsultaEstrategica(numero, idsLojasDoLojista.getFirst());
     }
 }

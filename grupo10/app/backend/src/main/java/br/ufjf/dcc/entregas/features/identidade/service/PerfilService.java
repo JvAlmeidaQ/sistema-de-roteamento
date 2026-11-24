@@ -14,6 +14,7 @@ import br.ufjf.dcc.entregas.core.exception.ConflitoNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
+import br.ufjf.dcc.entregas.core.security.AdminAccessService;
 import br.ufjf.dcc.entregas.features.identidade.dto.PerfilRequest;
 import br.ufjf.dcc.entregas.features.identidade.dto.PerfilResponse;
 import br.ufjf.dcc.entregas.features.identidade.dto.PessoaResumoResponse;
@@ -40,22 +41,23 @@ import java.util.Set;
 public class PerfilService {
 
     private final PerfilRepository repository;
+    private final AdminAccessService adminAccessService;
 
-    public PerfilService(PerfilRepository repository) {
+    public PerfilService(PerfilRepository repository, AdminAccessService adminAccessService) {
         this.repository = repository;
+        this.adminAccessService = adminAccessService;
     }
 
     // ================================================================== consultas
 
-    public List<PessoaResumoResponse> listarPessoas(String busca) {
+    public List<PessoaResumoResponse> listarPessoas(Long idUsuarioAutenticado, String busca) {
+        adminAccessService.exigirAdmin(idUsuarioAutenticado);
         return repository.listarPessoas(busca);
     }
 
     private void validarProprietario(Long idUsuarioAutenticado, Long idPessoa) {
-        if (idUsuarioAutenticado == null || idUsuarioAutenticado <= 0) {
-            throw new AcessoNegadoException("Cabeçalho X-User-Id é obrigatório para acessar ou editar este perfil.");
-        }
-        if (!idUsuarioAutenticado.equals(idPessoa)) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+        if (!idUsuarioAutenticado.equals(idPessoa) && !adminAccessService.isAdmin(idUsuarioAutenticado)) {
             throw new AcessoNegadoException("Você só tem permissão para visualizar ou editar o seu próprio perfil.");
         }
     }

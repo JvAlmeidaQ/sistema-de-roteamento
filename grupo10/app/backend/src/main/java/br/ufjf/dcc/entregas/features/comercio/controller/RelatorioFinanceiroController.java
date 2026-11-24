@@ -36,9 +36,10 @@ public class RelatorioFinanceiroController {
 
     @GetMapping("/lojas/resumo-financeiro")
     public List<ResumoFinanceiroLojaResponse> listarResumoFinanceiro(
+            @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
             @RequestParam(required = false) @Positive Long idLoja
     ) {
-        return relatorioService.listarResumoFinanceiroLojas(idLoja);
+        return relatorioService.listarResumoFinanceiroLojas(idUsuarioAutenticado, idLoja);
     }
 
     @GetMapping("/lojas/{idLoja}/relatorio")
@@ -55,8 +56,9 @@ public class RelatorioFinanceiroController {
 
     @GetMapping("/consultas/{numero}")
     public ConsultaEstrategicaResponse executarConsultaEstrategica(
+            @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
             @PathVariable @Min(5) @Max(12) int numero
     ) {
-        return relatorioService.executarConsultaEstrategica(numero);
+        return relatorioService.executarConsultaEstrategica(idUsuarioAutenticado, numero);
     }
 }

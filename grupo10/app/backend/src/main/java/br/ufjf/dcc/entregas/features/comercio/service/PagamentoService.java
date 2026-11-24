@@ -8,6 +8,7 @@ import br.ufjf.dcc.entregas.core.exception.AcessoNegadoException;
 import br.ufjf.dcc.entregas.core.exception.ConflitoNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
+import br.ufjf.dcc.entregas.core.security.AdminAccessService;
 import br.ufjf.dcc.entregas.features.comercio.dto.DivisaoPagamentoResponse;
 import br.ufjf.dcc.entregas.features.comercio.repository.DivisaoPagamentoRepository;
 import br.ufjf.dcc.entregas.features.comercio.repository.PedidoRepository;
@@ -33,26 +34,28 @@ public class PagamentoService {
 
     private final PedidoRepository pedidoRepository;
     private final DivisaoPagamentoRepository divisaoPagamentoRepository;
+    private final AdminAccessService adminAccessService;
     private final BigDecimal percentualRetencaoSubtotal;
 
     public PagamentoService(
             PedidoRepository pedidoRepository,
             DivisaoPagamentoRepository divisaoPagamentoRepository,
+            AdminAccessService adminAccessService,
             @Value("${app.financeiro.percentual-retencao-subtotal:0.15}") BigDecimal percentualRetencaoSubtotal
     ) {
         this.pedidoRepository = pedidoRepository;
         this.divisaoPagamentoRepository = divisaoPagamentoRepository;
+        this.adminAccessService = adminAccessService;
         this.percentualRetencaoSubtotal = percentualRetencaoSubtotal;
     }
 
     @Transactional
     public DivisaoPagamentoResponse calcularERegistrarSplit(Long idUsuarioAutenticado, Long idPedido) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
         var pedido = pedidoRepository.buscarPedidoPorIdForUpdate(idPedido)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pedido " + idPedido + " não encontrado."));
 
-        if (idUsuarioAutenticado != null) {
-            validarAutorizacaoAcesso(idUsuarioAutenticado, idPedido);
-        }
+        validarAutorizacaoAcesso(idUsuarioAutenticado, idPedido);
 
         if (divisaoPagamentoRepository.buscarPorPedido(idPedido).isPresent()) {
             throw new ConflitoNegocioException("[RF09] A divisão de pagamento do pedido " + idPedido + " já foi registrada.");
@@ -80,20 +83,21 @@ public class PagamentoService {
     }
 
     public DivisaoPagamentoResponse buscarPorPedido(Long idUsuarioAutenticado, Long idPedido) {
-        if (idUsuarioAutenticado != null) {
-            validarAutorizacaoAcesso(idUsuarioAutenticado, idPedido);
-        }
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+        validarAutorizacaoAcesso(idUsuarioAutenticado, idPedido);
         return divisaoPagamentoRepository.buscarPorPedido(idPedido)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Divisão de pagamento não encontrada para o pedido " + idPedido + "."));
     }
 
     private void validarAutorizacaoAcesso(Long idUsuarioAutenticado, Long idPedido) {
+        if (adminAccessService.isAdmin(idUsuarioAutenticado)) {
+            return;
+        }
         var detalhes = pedidoRepository.buscarDetalhesPedido(idPedido)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pedido " + idPedido + " não encontrado."));
-        boolean ehClienteDono = detalhes.idCliente().equals(idUsuarioAutenticado);
         boolean ehLojistaDono = detalhes.idLojista().equals(idUsuarioAutenticado);
-        if (!ehClienteDono && !ehLojistaDono) {
-            throw new AcessoNegadoException("Acesso negado à divisão financeira deste pedido.");
+        if (!ehLojistaDono) {
+            throw new AcessoNegadoException("Acesso restrito ao lojista responsável pela loja.");
         }
     }
 }

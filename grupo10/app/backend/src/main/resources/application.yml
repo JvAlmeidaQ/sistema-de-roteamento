@@ -24,3 +24,6 @@ app:
     taxa-servico-fixa: 2.50
     # Percentual retido pela plataforma sobre o subtotal da loja no split (15% -> loja recebe 85% - RF09/RN05)
     percentual-retencao-subtotal: 0.15
+  security:
+    # IDs de pessoas com permissão administrativa (fornecidos posteriormente pelo grupo)
+    admin-user-ids: []

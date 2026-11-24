@@ -8,6 +8,7 @@ import br.ufjf.dcc.entregas.core.exception.AcessoNegadoException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
+import br.ufjf.dcc.entregas.core.security.AdminAccessService;
 import br.ufjf.dcc.entregas.features.comercio.dto.CriarPedidoRequest;
 import br.ufjf.dcc.entregas.features.comercio.dto.ItemPedidoRequest;
 import br.ufjf.dcc.entregas.features.comercio.dto.ItemPedidoResponse;
@@ -36,13 +37,16 @@ import java.util.Set;
 public class PedidoService {
 
     private final PedidoRepository pedidoRepository;
+    private final AdminAccessService adminAccessService;
     private final BigDecimal taxaServicoFixa;
 
     public PedidoService(
             PedidoRepository pedidoRepository,
+            AdminAccessService adminAccessService,
             @Value("${app.financeiro.taxa-servico-fixa:2.50}") BigDecimal taxaServicoFixa
     ) {
         this.pedidoRepository = pedidoRepository;
+        this.adminAccessService = adminAccessService;
         this.taxaServicoFixa = taxaServicoFixa;
     }
 
@@ -156,10 +160,11 @@ public class PedidoService {
     }
 
     public PedidoResponse buscarPorId(Long idUsuarioAutenticado, Long idPedido) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
         PedidoDetalhadoRow pedido = pedidoRepository.buscarDetalhesPedido(idPedido)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pedido " + idPedido + " não encontrado."));
 
-        if (idUsuarioAutenticado != null) {
+        if (!adminAccessService.isAdmin(idUsuarioAutenticado)) {
             validarAcessoLeituraPedido(idUsuarioAutenticado, pedido);
         }
 
@@ -177,6 +182,8 @@ public class PedidoService {
             OffsetDateTime dataFim,
             int limit
     ) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+
         if (dataInicio != null && dataFim != null && dataInicio.isAfter(dataFim)) {
             throw new RequisicaoInvalidaException("A data inicial não pode ser posterior à data final.");
         }
@@ -189,7 +196,8 @@ public class PedidoService {
             }
         }
 
-        if (idUsuarioAutenticado != null) {
+        boolean ehAdmin = adminAccessService.isAdmin(idUsuarioAutenticado);
+        if (!ehAdmin) {
             if (idCliente != null && !idCliente.equals(idUsuarioAutenticado)) {
                 throw new AcessoNegadoException("Acesso negado: não é permitido consultar pedidos de outro cliente.");
             }
@@ -202,8 +210,9 @@ public class PedidoService {
             }
         }
 
+        Long filtroUsuario = ehAdmin ? null : idUsuarioAutenticado;
         List<PedidoDetalhadoRow> rows = pedidoRepository.listarPedidos(
-                idLoja, idCliente, idUsuarioAutenticado, status, dataInicio, dataFim, limit
+                idLoja, idCliente, filtroUsuario, status, dataInicio, dataFim, limit
         );
         if (rows.isEmpty()) {
             return List.of();
