@@ -95,6 +95,35 @@ public class PerfilRepository {
                 .fetchOptional();
     }
 
+    public Optional<PessoaRecord> buscarPessoaPorEmailOuCpf(String emailNormalizado, String cpfDigitos) {
+        Condition cond = null;
+        if (emailNormalizado != null && !emailNormalizado.isBlank()) {
+            cond = PESSOA.EMAIL.eq(emailNormalizado);
+        }
+        if (cpfDigitos != null && cpfDigitos.length() == 11) {
+            Condition cpfCond = PESSOA.CPF.eq(cpfDigitos);
+            cond = cond == null ? cpfCond : cond.or(cpfCond);
+        }
+        if (cond == null) {
+            return Optional.empty();
+        }
+        return dsl.selectFrom(PESSOA)
+                .where(cond)
+                .limit(1)
+                .fetchOptional();
+    }
+
+    public record LojaResumo(Long idLoja, String nome) {}
+
+    public Optional<LojaResumo> buscarPrimeiraLojaResumo(Long idLojista) {
+        return dsl.select(LOJA.ID_LOJA, LOJA.NOME)
+                .from(LOJA)
+                .where(LOJA.ID_LOJISTA.eq(idLojista))
+                .orderBy(LOJA.ID_LOJA.asc())
+                .limit(1)
+                .fetchOptional(r -> new LojaResumo(r.get(LOJA.ID_LOJA), r.get(LOJA.NOME)));
+    }
+
     public PapeisPessoa buscarPapeis(Long idPessoa) {
         return dsl.select(
                         CLIENTE.ID_PESSOA,

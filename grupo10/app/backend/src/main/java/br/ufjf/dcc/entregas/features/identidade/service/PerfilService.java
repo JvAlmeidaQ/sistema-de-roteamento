@@ -15,9 +15,11 @@ import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RequisicaoInvalidaException;
 import br.ufjf.dcc.entregas.core.security.AdminAccessService;
+import br.ufjf.dcc.entregas.features.identidade.dto.DisponibilidadeResponse;
 import br.ufjf.dcc.entregas.features.identidade.dto.PerfilRequest;
 import br.ufjf.dcc.entregas.features.identidade.dto.PerfilResponse;
 import br.ufjf.dcc.entregas.features.identidade.dto.PessoaResumoResponse;
+import br.ufjf.dcc.entregas.features.identidade.dto.SessaoAutenticadaResponse;
 import br.ufjf.dcc.entregas.features.identidade.repository.PerfilRepository;
 import br.ufjf.dcc.entregas.features.identidade.repository.PerfilRepository.PapeisPessoa;
 import br.ufjf.dcc.entregas.features.identidade.repository.PerfilRepository.TelefoneNovo;
@@ -53,6 +55,61 @@ public class PerfilService {
     public List<PessoaResumoResponse> listarPessoas(Long idUsuarioAutenticado, String busca) {
         adminAccessService.exigirAdmin(idUsuarioAutenticado);
         return repository.listarPessoas(busca);
+    }
+
+    public DisponibilidadeResponse verificarDisponibilidade(String email, String cpf) {
+        boolean emailDisponivel = true;
+        if (email != null && !email.isBlank()) {
+            emailDisponivel = !repository.existeEmailEmOutraPessoa(normalizarEmail(email), null);
+        }
+        boolean cpfDisponivel = true;
+        if (cpf != null && !cpf.isBlank()) {
+            String digitos = cpf.replaceAll("\\D", "");
+            if (digitos.length() == 11) {
+                cpfDisponivel = !repository.existeCpf(digitos);
+            }
+        }
+        return new DisponibilidadeResponse(emailDisponivel, cpfDisponivel);
+    }
+
+    public SessaoAutenticadaResponse entrar(String identificador) {
+        if (identificador == null || identificador.isBlank()) {
+            throw new RequisicaoInvalidaException("Informe o e-mail ou CPF cadastrado.");
+        }
+        String limpo = identificador.trim();
+        String emailNorm = limpo.contains("@") ? normalizarEmail(limpo) : null;
+        String cpfDigitos = limpo.contains("@") ? null : limpo.replaceAll("\\D", "");
+
+        PessoaRecord pessoa = repository.buscarPessoaPorEmailOuCpf(emailNorm, cpfDigitos)
+                .orElseThrow(() -> new RecursoNaoEncontradoException(
+                        "Nenhuma conta encontrada com o e-mail ou CPF informado."
+                ));
+        return montarSessaoAutenticada(pessoa);
+    }
+
+    public SessaoAutenticadaResponse obterSessao(Long idUsuarioAutenticado) {
+        adminAccessService.exigirIdentificacao(idUsuarioAutenticado);
+        PessoaRecord pessoa = repository.buscarPessoa(idUsuarioAutenticado)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Conta não encontrada."));
+        return montarSessaoAutenticada(pessoa);
+    }
+
+    private SessaoAutenticadaResponse montarSessaoAutenticada(PessoaRecord pessoa) {
+        PapeisPessoa papeis = repository.buscarPapeis(pessoa.getIdPessoa());
+        var loja = papeis.lojista()
+                ? repository.buscarPrimeiraLojaResumo(pessoa.getIdPessoa()).orElse(null)
+                : null;
+        return new SessaoAutenticadaResponse(
+                pessoa.getIdPessoa(),
+                pessoa.getNome(),
+                pessoa.getEmail(),
+                papeis.cliente(),
+                papeis.lojista(),
+                papeis.entregador(),
+                adminAccessService.isAdmin(pessoa.getIdPessoa()),
+                loja != null ? loja.idLoja() : null,
+                loja != null ? loja.nome() : null
+        );
     }
 
     private void validarProprietario(Long idUsuarioAutenticado, Long idPessoa) {
