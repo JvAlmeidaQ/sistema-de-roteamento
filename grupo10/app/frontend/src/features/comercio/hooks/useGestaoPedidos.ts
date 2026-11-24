@@ -4,11 +4,16 @@
  * Subdomínio: Comércio e Finanças
  */
 import { useCallback, useEffect, useState } from 'react'
+import type { PapelAtivo } from '@/context/SessaoUsuarioContext'
+import { formatarCodigoPedido, formatarStatusPedido } from '@/lib/apresentacao'
 import { extrairMensagemErro, pedidosApi } from '../api/comercio.api'
 import type { AvaliacaoFormValues } from '../schemas/comercio.schemas'
 import type { PedidoResponse, UsuarioSessao } from '../types/comercio.types'
 
-export function useGestaoPedidos(usuarioAtual: UsuarioSessao | null) {
+export function useGestaoPedidos(
+  usuarioAtual: UsuarioSessao | null,
+  papelAtivo: PapelAtivo | null,
+) {
   const [pedidos, setPedidos] = useState<PedidoResponse[]>([])
   const [pedidoSelecionado, setPedidoSelecionado] = useState<PedidoResponse | null>(null)
   const [statusFiltro, setStatusFiltro] = useState('')
@@ -17,15 +22,16 @@ export function useGestaoPedidos(usuarioAtual: UsuarioSessao | null) {
   const [sucesso, setSucesso] = useState<string | null>(null)
 
   const carregarPedidos = useCallback(async () => {
+    if (!usuarioAtual) return
     setCarregando(true)
     setErro(null)
     try {
       const params: { idLoja?: number; idCliente?: number; status?: string; limit: number } = {
         limit: 25,
       }
-      if (usuarioAtual?.perfilLojista && usuarioAtual.idLoja) {
+      if (papelAtivo === 'lojista' && usuarioAtual.idLoja) {
         params.idLoja = usuarioAtual.idLoja
-      } else if (usuarioAtual?.perfilCliente) {
+      } else if (papelAtivo === 'cliente') {
         params.idCliente = usuarioAtual.idPessoa
       }
       if (statusFiltro) params.status = statusFiltro
@@ -40,7 +46,7 @@ export function useGestaoPedidos(usuarioAtual: UsuarioSessao | null) {
     } finally {
       setCarregando(false)
     }
-  }, [usuarioAtual, statusFiltro])
+  }, [usuarioAtual, papelAtivo, statusFiltro])
 
   useEffect(() => {
     carregarPedidos()
@@ -55,8 +61,8 @@ export function useGestaoPedidos(usuarioAtual: UsuarioSessao | null) {
       setPedidos((prev) => prev.map((p) => (p.idPedido === idPedido ? atualizado : p)))
       setSucesso(
         novoStatus === 'pronto'
-          ? `Pedido #${String(idPedido).padStart(6, '0')} marcado como pronto! O gatilho do SGBD gerou a Entrega automaticamente (RN12).`
-          : `Status do pedido #${String(idPedido).padStart(6, '0')} atualizado para '${novoStatus}'.`,
+          ? `${formatarCodigoPedido(idPedido)} marcado como pronto para entrega.`
+          : `Status de ${formatarCodigoPedido(idPedido)} atualizado para ${formatarStatusPedido(novoStatus).toLowerCase()}.`,
       )
     } catch (e) {
       setErro(extrairMensagemErro(e))
@@ -69,7 +75,7 @@ export function useGestaoPedidos(usuarioAtual: UsuarioSessao | null) {
     try {
       const split = await pedidosApi.calcularDivisaoPagamento(idPedido)
       setSucesso(
-        `Divisão financeira (RF09/RN05) registrada: Loja R$ ${split.parcelaLoja.toFixed(2)}, Entregador R$ ${split.comissaoEntregador.toFixed(2)}, Plataforma R$ ${split.taxaPlataforma.toFixed(2)}.`,
+        `Divisão financeira registrada: Loja R$ ${split.parcelaLoja.toFixed(2)}, Entregador R$ ${split.comissaoEntregador.toFixed(2)}, Plataforma R$ ${split.taxaPlataforma.toFixed(2)}.`,
       )
       const atualizado = await pedidosApi.buscarPorId(idPedido)
       setPedidoSelecionado(atualizado)
@@ -92,7 +98,11 @@ export function useGestaoPedidos(usuarioAtual: UsuarioSessao | null) {
       } else {
         await pedidosApi.avaliarEntregador(idPedido, payload)
       }
-      setSucesso(`Avaliação do(a) ${alvo} enviada com sucesso (RF08)!`)
+      setSucesso(
+        alvo === 'loja'
+          ? 'Avaliação da loja enviada com sucesso.'
+          : 'Avaliação do entregador enviada com sucesso.',
+      )
       const atualizado = await pedidosApi.buscarPorId(idPedido)
       setPedidoSelecionado(atualizado)
       setPedidos((prev) => prev.map((p) => (p.idPedido === idPedido ? atualizado : p)))

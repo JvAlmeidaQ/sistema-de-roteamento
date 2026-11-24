@@ -20,10 +20,10 @@ export const atualizarLojaSchema = z.object({
   tempoEntregaEstimado: z
     .number({ error: 'Informe um valor numérico válido.' })
     .int('O tempo estimado deve ser um número inteiro.')
-    .positive('RN09/RR13: O tempo de entrega deve ser estritamente maior que zero.'),
+    .positive('O tempo de entrega deve ser maior que zero.'),
   taxaEntrega: z
     .number({ error: 'Informe um valor numérico válido.' })
-    .min(0, 'RR13: A taxa de entrega não pode ser negativa.'),
+    .min(0, 'A taxa de entrega não pode ser negativa.'),
 })
 
 export type AtualizarLojaFormValues = z.infer<typeof atualizarLojaSchema>
@@ -52,10 +52,10 @@ export const produtoSchema = z.object({
     .or(z.literal('')),
   preco: z
     .number({ error: 'Informe um valor numérico válido.' })
-    .positive('RN09/RR13: O preço deve ser estritamente maior que zero.'),
+    .positive('O preço deve ser maior que zero.'),
   categoriasIds: z
     .array(z.number())
-    .min(1, 'RR18: O produto deve pertencer a pelo menos uma categoria.'),
+    .min(1, 'O produto deve pertencer a pelo menos uma categoria.'),
 })
 
 export type ProdutoFormValues = z.infer<typeof produtoSchema>

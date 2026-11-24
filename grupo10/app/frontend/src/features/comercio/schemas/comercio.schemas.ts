@@ -6,7 +6,7 @@ import { z } from 'zod'
 
 export const criarPedidoSchema = z.object({
   idLoja: z.number().int().positive('Selecione uma loja válida.'),
-  idEndereco: z.number().int().positive('Selecione um endereço de entrega (RR03).'),
+  idEndereco: z.number().int().positive('Selecione um endereço de entrega.'),
   formaPagamento: z.enum(['pix', 'cartao_credito', 'cartao_debito', 'dinheiro'], {
     message: 'Selecione uma forma de pagamento.',
   }),
@@ -21,10 +21,10 @@ export const criarPedidoSchema = z.object({
         quantidade: z
           .number()
           .int('A quantidade deve ser um número inteiro.')
-          .min(1, 'RN09/RR13: A quantidade mínima é 1.'),
+          .min(1, 'A quantidade mínima é 1.'),
       }),
     )
-    .min(1, 'RR19: Adicione ao menos um item ao pedido.'),
+    .min(1, 'Adicione ao menos um item ao pedido.'),
 })
 
 export type CriarPedidoFormValues = z.infer<typeof criarPedidoSchema>
@@ -32,9 +32,9 @@ export type CriarPedidoFormValues = z.infer<typeof criarPedidoSchema>
 export const avaliacaoSchema = z.object({
   nota: z
     .number()
-    .int('RN06/RR15: A nota deve ser um número inteiro.')
-    .min(1, 'RN06/RR15: A nota mínima é 1.')
-    .max(5, 'RN06/RR15: A nota máxima é 5.'),
+    .int('A nota deve ser um número inteiro.')
+    .min(1, 'A nota mínima é 1.')
+    .max(5, 'A nota máxima é 5.'),
   comentario: z
     .string()
     .max(1000, 'O comentário deve ter no máximo 1000 caracteres.')

@@ -64,7 +64,7 @@ export const perfilSchema = z
     lojista: z.boolean(),
     entregador: z.boolean(),
     tipoVeiculo: z.enum(['', 'moto', 'bicicleta', 'carro']),
-    telefones: z.array(telefoneSchema).min(1, 'RR17: informe ao menos um telefone.'),
+    telefones: z.array(telefoneSchema).min(1, 'Informe ao menos um telefone.'),
     enderecos: z.array(enderecoSchema),
     indiceEnderecoAtual: z.number().nullable(),
     primeiraLoja: primeiraLojaSchema,
@@ -74,12 +74,12 @@ export const perfilSchema = z
       ctx.addIssue({ code: 'custom', path, message })
 
     if (!v.modoEdicao) {
-      if (soDigitos(v.cpf).length !== 11) erro(['cpf'], 'RN10: o CPF deve ter 11 dígitos.')
-      else if (!cpfValido(v.cpf)) erro(['cpf'], 'RN11: CPF inválido (dígitos verificadores não conferem).')
+      if (soDigitos(v.cpf).length !== 11) erro(['cpf'], 'O CPF deve ter 11 dígitos.')
+      else if (!cpfValido(v.cpf)) erro(['cpf'], 'CPF inválido (dígitos verificadores não conferem).')
     }
 
     if (!v.cliente && !v.lojista && !v.entregador) {
-      erro(['cliente'], 'RR16: selecione ao menos uma função.')
+      erro(['cliente'], 'Selecione ao menos uma função.')
     }
     if (v.entregador && !v.tipoVeiculo) {
       erro(['tipoVeiculo'], 'Informe o veículo do entregador.')
@@ -95,9 +95,9 @@ export const perfilSchema = z
       if (!endereco.logradouro) erro(['enderecos', i, 'logradouro'], 'Logradouro é obrigatório.')
       if (!endereco.numero) erro(['enderecos', i, 'numero'], 'Número é obrigatório.')
       if (!endereco.bairro) erro(['enderecos', i, 'bairro'], 'Bairro é obrigatório.')
-      if (soDigitos(endereco.cep).length !== 8) erro(['enderecos', i, 'cep'], 'RR14: o CEP deve ter 8 dígitos.')
+      if (soDigitos(endereco.cep).length !== 8) erro(['enderecos', i, 'cep'], 'O CEP deve ter 8 dígitos.')
       if (!endereco.cidade) erro(['enderecos', i, 'cidade'], 'Cidade é obrigatória.')
-      if (!UF_REGEX.test(endereco.estado)) erro(['enderecos', i, 'estado'], 'RR14: UF com 2 letras.')
+      if (!UF_REGEX.test(endereco.estado)) erro(['enderecos', i, 'estado'], 'Informe a UF com 2 letras.')
     })
 
     if (v.cliente) {
@@ -112,23 +112,23 @@ export const perfilSchema = z
       const loja = v.primeiraLoja
       const base = ['primeiraLoja']
       if (!loja.nome) erro([...base, 'nome'], 'Nome da loja é obrigatório.')
-      if (soDigitos(loja.cnpj).length !== 14) erro([...base, 'cnpj'], 'RN10: o CNPJ deve ter 14 dígitos.')
-      else if (!cnpjValido(loja.cnpj)) erro([...base, 'cnpj'], 'RN11: CNPJ inválido (dígitos verificadores não conferem).')
+      if (soDigitos(loja.cnpj).length !== 14) erro([...base, 'cnpj'], 'O CNPJ deve ter 14 dígitos.')
+      else if (!cnpjValido(loja.cnpj)) erro([...base, 'cnpj'], 'CNPJ inválido (dígitos verificadores não conferem).')
       if (!/^\d{10,11}$/.test(soDigitos(loja.telefone))) erro([...base, 'telefone'], 'Informe DDD + número.')
       if (!loja.logradouro) erro([...base, 'logradouro'], 'Logradouro é obrigatório.')
       if (!loja.numero) erro([...base, 'numero'], 'Número é obrigatório.')
       if (!loja.bairro) erro([...base, 'bairro'], 'Bairro é obrigatório.')
-      if (soDigitos(loja.cep).length !== 8) erro([...base, 'cep'], 'RR14: o CEP deve ter 8 dígitos.')
+      if (soDigitos(loja.cep).length !== 8) erro([...base, 'cep'], 'O CEP deve ter 8 dígitos.')
       if (!loja.cidade) erro([...base, 'cidade'], 'Cidade é obrigatória.')
-      if (!UF_REGEX.test(loja.estado)) erro([...base, 'estado'], 'RR14: UF com 2 letras.')
+      if (!UF_REGEX.test(loja.estado)) erro([...base, 'estado'], 'Informe a UF com 2 letras.')
       const tempo = Number(loja.tempoEntregaEstimado)
       if (!Number.isInteger(tempo) || tempo <= 0) {
-        erro([...base, 'tempoEntregaEstimado'], 'RR13: tempo em minutos, maior que zero.')
+        erro([...base, 'tempoEntregaEstimado'], 'Informe um tempo em minutos maior que zero.')
       }
       const taxaTexto = loja.taxaEntrega.trim()
       const taxa = Number(taxaTexto.replace(',', '.'))
       if (!/^\d{1,10}([.,]\d{1,2})?$/.test(taxaTexto) || Number.isNaN(taxa) || taxa < 0) {
-        erro([...base, 'taxaEntrega'], 'RR13: informe uma taxa não negativa com até 2 casas decimais.')
+        erro([...base, 'taxaEntrega'], 'Informe uma taxa não negativa com até 2 casas decimais.')
       }
     }
   })

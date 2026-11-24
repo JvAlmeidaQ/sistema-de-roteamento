@@ -1,20 +1,21 @@
 /**
  * Disciplina: DCC061 (Engenharia de Software)
- * Feature Flag: VITE_APP_MODE=full (!isBd)
- * Subdomínio: Identidade e Contato — RF01 (visualização do perfil de uma Pessoa)
+ * Subdomínio: Identidade e Contato — Visualização do perfil
  */
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
-import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
+import { rotaInicialPorPapel, useSessaoUsuario } from '@/context/SessaoUsuarioContext'
+import { limparNomeLoja } from '@/lib/apresentacao'
 import { usePerfil } from '../hooks/usePerfis'
 import { ROTULO_TELEFONE, ROTULO_VEICULO, mascaraCep, mascaraCnpj, mascaraCpf, mascaraTelefone } from '../utils/formatadores'
 import { PapelBadges } from './PapelBadges'
 
 function Cartao({ titulo, children, acao }: { titulo: string; children: ReactNode; acao?: ReactNode }) {
   return (
-    <section className="rounded-3xl bg-surface p-6 shadow-low">
+    <section className="rounded-2xl border border-surface-bg bg-surface p-6">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-lg">{titulo}</h3>
+        <h3 className="text-lg font-semibold text-brand-dark">{titulo}</h3>
         {acao}
       </div>
       {children}
@@ -24,7 +25,7 @@ function Cartao({ titulo, children, acao }: { titulo: string; children: ReactNod
 
 export default function PerfilDetalhePage() {
   const { id } = useParams()
-  const { usuarioAtual } = useSessaoUsuario()
+  const { usuarioAtual, papelAtivo } = useSessaoUsuario()
   const idPessoa = Number(id)
   const valido = Number.isSafeInteger(idPessoa) && idPessoa > 0
   const { perfil, carregando, erro } = usePerfil(valido ? idPessoa : null, usuarioAtual?.idPessoa ?? null)
@@ -32,15 +33,15 @@ export default function PerfilDetalhePage() {
   const mensagemSucesso = (location.state as { mensagem?: string } | null)?.mensagem
 
   if (!valido) {
-    return <p role="alert" className="text-state-error">Identificador de pessoa inválido.</p>
+    return <p role="alert" className="text-state-error">Identificador inválido.</p>
   }
   if (carregando) {
     return (
       <div className="space-y-4" role="status" aria-label="Carregando perfil">
-        <div className="h-24 animate-pulse rounded-3xl bg-surface" />
+        <div className="h-24 animate-pulse rounded-2xl bg-surface" />
         <div className="grid gap-4 md:grid-cols-2">
-          <div className="h-40 animate-pulse rounded-3xl bg-surface" />
-          <div className="h-40 animate-pulse rounded-3xl bg-surface" />
+          <div className="h-40 animate-pulse rounded-2xl bg-surface" />
+          <div className="h-40 animate-pulse rounded-2xl bg-surface" />
         </div>
       </div>
     )
@@ -50,12 +51,18 @@ export default function PerfilDetalhePage() {
       <div className="space-y-3">
         <p role="alert" className="rounded-2xl bg-state-error/10 px-4 py-3 text-sm text-state-error">
           {erro?.status === 403
-            ? 'Você só tem permissão para visualizar ou editar o seu próprio perfil. Selecione esta conta no seletor Sessão (X-User-Id) para continuar.'
+            ? 'Você só tem permissão para visualizar ou editar o seu próprio perfil.'
             : erro?.status === 404
-              ? 'Pessoa não encontrada.'
+              ? 'Conta não encontrada.'
               : erro?.mensagem ?? 'Não foi possível carregar o perfil.'}
         </p>
-        <Link to="/perfis" className="text-sm font-semibold text-brand-outline hover:underline">← Voltar para a lista</Link>
+        <Link
+          to={papelAtivo === 'admin' ? '/perfis' : rotaInicialPorPapel(papelAtivo)}
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-outline hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Voltar
+        </Link>
       </div>
     )
   }
@@ -65,7 +72,15 @@ export default function PerfilDetalhePage() {
 
   return (
     <div className="space-y-6">
-      <Link to="/perfis" className="text-sm font-semibold text-brand-outline hover:underline">← Perfis</Link>
+      {papelAtivo === 'admin' && (
+        <Link
+          to="/perfis"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-outline hover:underline"
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Perfis cadastrados
+        </Link>
+      )}
 
       {mensagemSucesso && (
         <p role="status" className="rounded-2xl bg-state-success/15 px-4 py-3 text-sm font-semibold text-brand-dark">
@@ -73,10 +88,9 @@ export default function PerfilDetalhePage() {
         </p>
       )}
 
-      <header className="flex flex-wrap items-start justify-between gap-4 rounded-3xl bg-surface p-6 shadow-low">
+      <header className="flex flex-wrap items-start justify-between gap-4 rounded-2xl border border-surface-bg bg-surface p-6">
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-text-default">Pessoa #{perfil.idPessoa}</p>
-          <h2 className="text-3xl">{perfil.nome}</h2>
+          <h2 className="text-3xl font-semibold text-brand-dark">{perfil.nome}</h2>
           <PapelBadges
             cliente={perfil.cliente}
             lojista={perfil.lojista}
@@ -97,7 +111,7 @@ export default function PerfilDetalhePage() {
         {ehProprioPerfil && (
           <Link
             to={`/perfis/${perfil.idPessoa}/editar`}
-            className="rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40"
+            className="rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
           >
             Editar perfil
           </Link>
@@ -124,16 +138,16 @@ export default function PerfilDetalhePage() {
           <ul className="space-y-2 text-sm">
             <li>
               <span className="font-semibold text-brand-dark">Cliente:</span>{' '}
-              {perfil.cliente ? 'sim' : 'não'}
+              {perfil.cliente ? 'ativo' : 'não'}
               {perfil.restricoes.clienteComPedidos && ' · possui pedidos registrados'}
             </li>
             <li>
               <span className="font-semibold text-brand-dark">Lojista:</span>{' '}
-              {perfil.lojista ? `sim · ${perfil.lojas.length} loja(s)` : 'não'}
+              {perfil.lojista ? `ativo · ${perfil.lojas.length} loja(s)` : 'não'}
             </li>
             <li>
               <span className="font-semibold text-brand-dark">Entregador:</span>{' '}
-              {perfil.entregador ? `sim · ${ROTULO_VEICULO[perfil.tipoVeiculo ?? ''] ?? perfil.tipoVeiculo}` : 'não'}
+              {perfil.entregador ? `ativo · ${ROTULO_VEICULO[perfil.tipoVeiculo ?? ''] ?? perfil.tipoVeiculo}` : 'não'}
               {perfil.restricoes.entregadorComRotas && ' · possui rotas registradas'}
             </li>
           </ul>
@@ -177,8 +191,12 @@ export default function PerfilDetalhePage() {
           titulo={`Lojas (${perfil.lojas.length})`}
           acao={
             podeAbrirPainelLojista ? (
-              <Link to="/catalogo" className="text-xs font-semibold text-brand-outline hover:underline">
-                Abrir Painel do Lojista →
+              <Link
+                to="/catalogo"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-brand-outline hover:underline"
+              >
+                Gerenciar minha loja
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
               </Link>
             ) : undefined
           }
@@ -187,7 +205,7 @@ export default function PerfilDetalhePage() {
             {perfil.lojas.map((l) => (
               <li key={l.idLoja} className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
                 <span className="font-semibold text-brand-dark">
-                  #{l.idLoja} · {l.nome}
+                  {limparNomeLoja(l.nome)}
                 </span>
                 <span className="tabular-nums">{mascaraCnpj(l.cnpj)}</span>
                 <span
@@ -202,7 +220,6 @@ export default function PerfilDetalhePage() {
               </li>
             ))}
           </ul>
-          <p className="mt-2 text-xs">O Painel do Lojista usa a pessoa selecionada na sessão (X-User-Id).</p>
         </Cartao>
       )}
     </div>

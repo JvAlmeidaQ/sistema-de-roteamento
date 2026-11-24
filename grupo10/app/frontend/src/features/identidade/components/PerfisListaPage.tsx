@@ -1,7 +1,6 @@
 /**
  * Disciplina: DCC061 (Engenharia de Software)
- * Feature Flag: VITE_APP_MODE=full (!isBd)
- * Subdomínio: Identidade e Contato — RF01 (listagem e busca de perfis, visão vw_perfil_pessoa)
+ * Subdomínio: Identidade e Contato — Listagem administrativa de perfis
  */
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -16,24 +15,16 @@ export default function PerfisListaPage() {
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-3xl">Perfis (RF01)</h2>
-          <p className="text-sm">
-            Pessoas cadastradas e seus papéis de Cliente, Lojista e Entregador (especialização total e sobreposta — RR16).
-          </p>
-        </div>
-        <Link
-          to="/perfis/novo"
-          className="rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40"
-        >
-          + Novo perfil
-        </Link>
+      <header>
+        <h2 className="text-3xl font-semibold text-brand-dark">Perfis cadastrados</h2>
+        <p className="mt-1 text-sm text-text-default">
+          Consulte os usuários da plataforma e suas funções vinculadas.
+        </p>
       </header>
 
-      <div className="rounded-3xl bg-surface p-6 shadow-low">
+      <div className="rounded-2xl border border-surface-bg bg-surface p-6">
         <label htmlFor="busca-perfil" className="block text-xs font-semibold text-brand-dark">
-          Buscar por nome, e-mail, CPF ou ID
+          Buscar por nome, e-mail ou CPF
         </label>
         <div className="mt-1 flex gap-2">
           <input
@@ -42,7 +33,7 @@ export default function PerfisListaPage() {
             maxLength={120}
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
-            placeholder="Ex.: Ana, pessoa12@exemplo.com, 123.456…"
+            placeholder="Ex.: Ana, nome@exemplo.com, 123.456…"
             className="w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline focus-visible:ring-2 focus-visible:ring-brand-outline/30"
           />
           {busca && (
@@ -66,7 +57,6 @@ export default function PerfisListaPage() {
           <table className="w-full min-w-[720px] text-left text-sm">
             <thead>
               <tr className="border-b border-surface-bg text-xs uppercase tracking-wide text-text-default">
-                <th className="py-2 pr-3">ID</th>
                 <th className="py-2 pr-3">Nome</th>
                 <th className="py-2 pr-3">CPF</th>
                 <th className="py-2 pr-3">E-mail</th>
@@ -78,7 +68,7 @@ export default function PerfisListaPage() {
               {carregando && pessoas.length === 0 &&
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-surface-bg/60">
-                    <td colSpan={6} className="py-3">
+                    <td colSpan={5} className="py-3">
                       <div className="h-4 animate-pulse rounded bg-surface-bg" />
                     </td>
                   </tr>
@@ -89,7 +79,6 @@ export default function PerfisListaPage() {
                   onClick={() => navigate(`/perfis/${p.idPessoa}`)}
                   className="cursor-pointer border-b border-surface-bg/60 transition-colors hover:bg-surface-bg/40"
                 >
-                  <td className="py-2.5 pr-3 text-xs text-text-default">#{p.idPessoa}</td>
                   <td className="py-2.5 pr-3 font-semibold text-brand-dark">
                     <Link to={`/perfis/${p.idPessoa}`} onClick={(e) => e.stopPropagation()} className="hover:underline">
                       {p.nome}

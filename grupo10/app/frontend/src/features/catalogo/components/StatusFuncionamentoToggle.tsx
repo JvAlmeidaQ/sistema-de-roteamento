@@ -42,15 +42,15 @@ export function StatusFuncionamentoToggle({
         className={`rounded-full px-4 py-1.5 text-xs font-semibold transition-all ${
           isAberta
             ? 'border border-state-error/40 bg-surface text-state-error hover:bg-state-error/10'
-            : 'bg-brand-lime text-brand-dark hover:bg-brand-green/30'
+            : 'bg-brand-lime text-brand-dark hover:bg-brand-lime/80'
         } disabled:opacity-50 disabled:cursor-not-allowed`}
-        title="Alternar status de funcionamento (RF07)"
+        title="Alternar status de funcionamento da loja"
       >
         {disabled
           ? 'Atualizando...'
           : isAberta
-            ? 'Fechar Loja (RF07)'
-            : 'Abrir Loja (RF07)'}
+            ? 'Fechar loja'
+            : 'Abrir loja'}
       </button>
     </div>
   )

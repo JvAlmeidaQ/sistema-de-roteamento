@@ -3,14 +3,16 @@
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Comércio e Finanças
  */
+import { RefreshCw } from 'lucide-react'
 import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
+import { limparNomeLoja } from '@/lib/apresentacao'
 import { useGestaoPedidos } from '../hooks/useGestaoPedidos'
 import { DetalhesPedidoPanel } from './DetalhesPedidoPanel'
 import { SkeletonBlock } from './SkeletonBlock'
 import { StatusBadge, formatarIdPedido, formatarMoeda } from './StatusBadge'
 
 export function GestaoPedidosPage() {
-  const { usuarioAtual } = useSessaoUsuario()
+  const { usuarioAtual, papelAtivo } = useSessaoUsuario()
   const {
     pedidos,
     pedidoSelecionado,
@@ -24,18 +26,24 @@ export function GestaoPedidosPage() {
     executarTransicao,
     registrarSplit,
     enviarAvaliacao,
-  } = useGestaoPedidos(usuarioAtual)
+  } = useGestaoPedidos(usuarioAtual, papelAtivo)
+
+  const tituloPagina =
+    papelAtivo === 'lojista'
+      ? `Pedidos — ${limparNomeLoja(usuarioAtual?.nomeLoja) || 'Minha loja'}`
+      : 'Meus pedidos'
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-3xl font-semibold text-brand-dark">
-            Gestão de Pedidos, Split & Avaliações (RF03–RF09)
+            {tituloPagina}
           </h2>
           <p className="mt-1 text-sm text-text-default">
-            Listagem filtrada pelo usuário selecionado ({usuarioAtual?.nome ?? '—'}). Alterne a
-            sessão entre Cliente e Lojista para exercitar a máquina de estados (RR06).
+            {papelAtivo === 'lojista'
+              ? 'Acompanhe os pedidos recebidos pela sua loja e atualize o andamento.'
+              : 'Acompanhe seus pedidos, confirme pagamentos e avalie sua experiência.'}
           </p>
         </div>
 
@@ -53,16 +61,17 @@ export function GestaoPedidosPage() {
             <option value="solicitado">Solicitado</option>
             <option value="aceito">Aceito</option>
             <option value="pago">Pago</option>
-            <option value="em_preparacao">Em Preparação</option>
-            <option value="pronto">Pronto</option>
+            <option value="em_preparacao">Em preparação</option>
+            <option value="pronto">Pronto para entrega</option>
             <option value="concluido">Concluído</option>
             <option value="recusado">Recusado</option>
           </select>
           <button
             type="button"
             onClick={carregarPedidos}
-            className="rounded-full border border-brand-dark bg-surface px-4 py-2 text-xs font-semibold text-brand-dark"
+            className="inline-flex items-center gap-1.5 rounded-full border border-brand-dark bg-surface px-4 py-2 text-xs font-semibold text-brand-dark hover:bg-surface-bg/50"
           >
+            <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
             Atualizar
           </button>
         </div>
@@ -140,7 +149,7 @@ export function GestaoPedidosPage() {
                         {formatarIdPedido(pedido.idPedido)}
                       </td>
                       <td className="py-3 pr-3">
-                        <p className="font-semibold text-brand-dark">{pedido.nomeLoja}</p>
+                        <p className="font-semibold text-brand-dark">{limparNomeLoja(pedido.nomeLoja)}</p>
                         <p className="text-xs text-text-default">{pedido.nomeCliente}</p>
                       </td>
                       <td className="py-3 pr-3">
@@ -173,6 +182,7 @@ export function GestaoPedidosPage() {
 
         <DetalhesPedidoPanel
           pedido={pedidoSelecionado}
+          papelAtivo={papelAtivo}
           onTransicionar={executarTransicao}
           onCalcularSplit={registrarSplit}
           onEnviarAvaliacao={enviarAvaliacao}

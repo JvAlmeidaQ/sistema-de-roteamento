@@ -1,9 +1,11 @@
 /**
- * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
- * Subdomínio: Comércio e Finanças (disponível em VITE_APP_MODE=bd e full)
+ * Disciplina: DCC061 (Engenharia de Software)
+ * Subdomínio: Comércio e Finanças
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { StarRating } from '@/components/StarRating'
 import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
+import { formatarStatusPedido, limparNomeLoja } from '@/lib/apresentacao'
 import { useRelatoriosFinanceiros } from '../hooks/useRelatoriosFinanceiros'
 import { ConsultasEstrategicasSection } from './ConsultasEstrategicasSection'
 import { SkeletonBlock } from './SkeletonBlock'
@@ -11,7 +13,7 @@ import { StatusBadge, formatarDataHora, formatarIdPedido, formatarMoeda } from '
 import { VisaoResumoFinanceiroTable } from './VisaoResumoFinanceiroTable'
 
 export function RelatoriosFinanceirosPage() {
-  const { usuarioAtual } = useSessaoUsuario()
+  const { usuarioAtual, papelAtivo } = useSessaoUsuario()
   const {
     resumoLojas,
     lojas,
@@ -21,78 +23,97 @@ export function RelatoriosFinanceirosPage() {
     erro,
     buscarRelatorioParametrizado,
     carregarConsulta,
-  } = useRelatoriosFinanceiros()
+  } = useRelatoriosFinanceiros(usuarioAtual, papelAtivo)
 
-  const [aba, setAba] = useState<'visao' | 'parametrizado' | 'consultas'>('visao')
-  const [idLojaFiltro, setIdLojaFiltro] = useState<number>(1)
+  const ehAdmin = papelAtivo === 'admin'
+  const [aba, setAba] = useState<'visao' | 'parametrizado' | 'consultas'>(
+    ehAdmin ? 'visao' : 'parametrizado',
+  )
+  const [idLojaFiltro, setIdLojaFiltro] = useState<number>(usuarioAtual?.idLoja ?? 0)
   const [statusFiltro, setStatusFiltro] = useState<string>('concluido')
   const [dataInicio, setDataInicio] = useState<string>('')
   const [dataFim, setDataFim] = useState<string>('')
 
   useEffect(() => {
-    if (usuarioAtual?.perfilLojista && usuarioAtual.idLoja) {
+    if (papelAtivo === 'lojista' && usuarioAtual?.idLoja) {
       setIdLojaFiltro(usuarioAtual.idLoja)
-    } else if (lojas[0] && idLojaFiltro === 1) {
+      setAba((atual) => (atual === 'visao' ? 'parametrizado' : atual))
+      void buscarRelatorioParametrizado(usuarioAtual.idLoja, {
+        status: statusFiltro,
+        dataInicio,
+        dataFim,
+      })
+    } else if (papelAtivo === 'admin' && lojas[0] && idLojaFiltro === 0) {
       setIdLojaFiltro(lojas[0].idLoja)
     }
-  }, [usuarioAtual, lojas])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [papelAtivo, usuarioAtual?.idLoja, lojas])
 
-  const lojaSelecionada = useMemo(
-    () => lojas.find((l) => l.idLoja === idLojaFiltro) ?? null,
-    [lojas, idLojaFiltro],
-  )
+  const resumoMinhaLoja = !ehAdmin ? resumoLojas[0] ?? null : null
+  const nomeLojaTitulo =
+    limparNomeLoja(usuarioAtual?.nomeLoja) ||
+    limparNomeLoja(resumoMinhaLoja?.nomeLoja) ||
+    'Minha loja'
 
-  const ehLojistaDono =
-    Boolean(lojaSelecionada) && usuarioAtual?.idPessoa === lojaSelecionada?.idLojista
+  const tituloPrincipal = ehAdmin
+    ? 'Painel financeiro consolidado'
+    : `Relatórios — ${nomeLojaTitulo}`
+
+  const subtituloPrincipal = ehAdmin
+    ? 'Visão consolidada de faturamento, repasses e análises gerenciais da plataforma.'
+    : 'Acompanhe o desempenho financeiro, pedidos por período e análises da sua loja.'
+
+  const aplicarFiltros = () => {
+    const idAlvo = ehAdmin ? idLojaFiltro : (usuarioAtual?.idLoja ?? idLojaFiltro)
+    if (!idAlvo) return
+    void buscarRelatorioParametrizado(idAlvo, {
+      status: statusFiltro,
+      dataInicio,
+      dataFim,
+    })
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="font-display text-3xl font-semibold text-brand-dark">
-            Painel Financeiro & Consultas SQL (RF10)
+            {tituloPrincipal}
           </h2>
-          <p className="mt-1 text-sm text-text-default">
-            Visão <code>vw_resumo_financeiro_loja</code>, relatório parametrizado por loja/período
-            e consultas analíticas de Comércio e Finanças.
-          </p>
+          <p className="mt-1 text-sm text-text-default">{subtituloPrincipal}</p>
         </div>
 
         <div role="tablist" aria-label="Seções de relatórios" className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={aba === 'visao'}
-            onClick={() => setAba('visao')}
-            className={`rounded-full px-4 py-2 text-xs font-semibold ${
-              aba === 'visao'
-                ? 'bg-brand-lime text-brand-dark'
-                : 'border border-brand-dark bg-surface text-brand-dark'
-            }`}
-          >
-            Visão Financeira (View)
-          </button>
+          {ehAdmin && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={aba === 'visao'}
+              onClick={() => setAba('visao')}
+              className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
+                aba === 'visao'
+                  ? 'bg-brand-lime text-brand-dark'
+                  : 'border border-brand-dark bg-surface text-brand-dark hover:bg-surface-bg/50'
+              }`}
+            >
+              Visão consolidada
+            </button>
+          )}
           <button
             type="button"
             role="tab"
             aria-selected={aba === 'parametrizado'}
             onClick={() => {
               setAba('parametrizado')
-              if (!relatorio) {
-                buscarRelatorioParametrizado(idLojaFiltro, {
-                  status: statusFiltro,
-                  dataInicio,
-                  dataFim,
-                })
-              }
+              if (!relatorio) aplicarFiltros()
             }}
-            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+            className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
               aba === 'parametrizado'
                 ? 'bg-brand-lime text-brand-dark'
-                : 'border border-brand-dark bg-surface text-brand-dark'
+                : 'border border-brand-dark bg-surface text-brand-dark hover:bg-surface-bg/50'
             }`}
           >
-            Relatório Parametrizado (RF10)
+            Pedidos por período
           </button>
           <button
             type="button"
@@ -102,16 +123,49 @@ export function RelatoriosFinanceirosPage() {
               setAba('consultas')
               if (!consultaAtiva) carregarConsulta(5)
             }}
-            className={`rounded-full px-4 py-2 text-xs font-semibold ${
+            className={`rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
               aba === 'consultas'
                 ? 'bg-brand-lime text-brand-dark'
-                : 'border border-brand-dark bg-surface text-brand-dark'
+                : 'border border-brand-dark bg-surface text-brand-dark hover:bg-surface-bg/50'
             }`}
           >
-            Consultas SQL (C5–C12)
+            {ehAdmin ? 'Análises gerenciais' : 'Análises da loja'}
           </button>
         </div>
       </div>
+
+      {!ehAdmin && resumoMinhaLoja && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-surface-bg bg-surface p-5">
+            <p className="text-xs font-semibold text-text-default">Faturamento bruto</p>
+            <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-brand-dark">
+              {formatarMoeda(resumoMinhaLoja.faturamentoBruto)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-surface-bg bg-surface p-5">
+            <p className="text-xs font-semibold text-text-default">Repasse da loja</p>
+            <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-brand-outline">
+              {formatarMoeda(resumoMinhaLoja.repasseTotalLoja)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-surface-bg bg-surface p-5">
+            <p className="text-xs font-semibold text-text-default">Pedidos concluídos</p>
+            <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-brand-dark">
+              {resumoMinhaLoja.pedidosConcluidos}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-surface-bg bg-surface p-5">
+            <p className="text-xs font-semibold text-text-default">Avaliação média</p>
+            <div className="mt-2">
+              {resumoMinhaLoja.mediaAvaliacaoLoja != null ? (
+                <StarRating nota={Number(resumoMinhaLoja.mediaAvaliacaoLoja)} tamanho="md" rotulo="Avaliação média da loja" />
+              ) : (
+                <span className="text-sm text-text-default">Sem avaliações</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {erro && (
         <div
@@ -122,31 +176,32 @@ export function RelatoriosFinanceirosPage() {
         </div>
       )}
 
-      {aba === 'visao' && (
+      {ehAdmin && aba === 'visao' && (
         <VisaoResumoFinanceiroTable resumoLojas={resumoLojas} carregando={carregando} />
       )}
 
       {aba === 'parametrizado' && (
         <section className="space-y-5">
-
           <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-surface-bg bg-surface p-6">
-            <div>
-              <label htmlFor="relatorio-loja" className="block text-xs font-semibold text-brand-dark">
-                Loja
-              </label>
-              <select
-                id="relatorio-loja"
-                value={idLojaFiltro}
-                onChange={(e) => setIdLojaFiltro(Number(e.target.value))}
-                className="mt-1 rounded-2xl border border-surface-bg bg-surface px-3 py-2 text-sm text-brand-dark"
-              >
-                {lojas.map((l) => (
-                  <option key={l.idLoja} value={l.idLoja}>
-                    #{l.idLoja} · {l.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {ehAdmin && (
+              <div>
+                <label htmlFor="relatorio-loja" className="block text-xs font-semibold text-brand-dark">
+                  Loja
+                </label>
+                <select
+                  id="relatorio-loja"
+                  value={idLojaFiltro}
+                  onChange={(e) => setIdLojaFiltro(Number(e.target.value))}
+                  className="mt-1 rounded-2xl border border-surface-bg bg-surface px-3 py-2 text-sm text-brand-dark"
+                >
+                  {lojas.map((l) => (
+                    <option key={l.idLoja} value={l.idLoja}>
+                      {limparNomeLoja(l.nome)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label
                 htmlFor="relatorio-status"
@@ -164,8 +219,8 @@ export function RelatoriosFinanceirosPage() {
                 <option value="solicitado">Solicitado</option>
                 <option value="aceito">Aceito</option>
                 <option value="pago">Pago</option>
-                <option value="em_preparacao">Em Preparação</option>
-                <option value="pronto">Pronto</option>
+                <option value="em_preparacao">Em preparação</option>
+                <option value="pronto">Pronto para entrega</option>
                 <option value="concluido">Concluído</option>
                 <option value="recusado">Recusado</option>
               </select>
@@ -175,7 +230,7 @@ export function RelatoriosFinanceirosPage() {
                 htmlFor="relatorio-data-inicio"
                 className="block text-xs font-semibold text-brand-dark"
               >
-                Data Início
+                Data inicial
               </label>
               <input
                 id="relatorio-data-inicio"
@@ -190,7 +245,7 @@ export function RelatoriosFinanceirosPage() {
                 htmlFor="relatorio-data-fim"
                 className="block text-xs font-semibold text-brand-dark"
               >
-                Data Fim
+                Data final
               </label>
               <input
                 id="relatorio-data-fim"
@@ -202,17 +257,11 @@ export function RelatoriosFinanceirosPage() {
             </div>
             <button
               type="button"
-              onClick={() =>
-                buscarRelatorioParametrizado(idLojaFiltro, {
-                  status: statusFiltro,
-                  dataInicio,
-                  dataFim,
-                })
-              }
+              onClick={aplicarFiltros}
               disabled={carregando}
-              className="rounded-full bg-brand-lime px-5 py-2.5 text-sm font-semibold text-brand-dark"
+              className="rounded-full bg-brand-lime px-5 py-2.5 text-sm font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80 disabled:opacity-50"
             >
-              {carregando ? 'Consultando...' : 'Aplicar Filtros'}
+              {carregando ? 'Consultando...' : 'Aplicar filtros'}
             </button>
           </div>
 
@@ -224,19 +273,19 @@ export function RelatoriosFinanceirosPage() {
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="rounded-2xl border border-surface-bg bg-surface p-5">
-                  <p className="text-xs font-semibold text-text-default">Pedidos Encontrados</p>
+                  <p className="text-xs font-semibold text-text-default">Pedidos encontrados</p>
                   <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-brand-dark">
                     {relatorio.totalPedidosFiltrados}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-surface-bg bg-surface p-5">
-                  <p className="text-xs font-semibold text-text-default">Faturamento Filtrado</p>
+                  <p className="text-xs font-semibold text-text-default">Faturamento no período</p>
                   <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-brand-outline">
                     {formatarMoeda(relatorio.faturamentoFiltrado)}
                   </p>
                 </div>
                 <div className="rounded-2xl border border-surface-bg bg-surface p-5">
-                  <p className="text-xs font-semibold text-text-default">Ticket Médio</p>
+                  <p className="text-xs font-semibold text-text-default">Ticket médio</p>
                   <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-brand-dark">
                     {formatarMoeda(relatorio.ticketMedioFiltrado)}
                   </p>
@@ -245,7 +294,8 @@ export function RelatoriosFinanceirosPage() {
 
               <div className="overflow-x-auto rounded-2xl border border-surface-bg bg-surface p-6">
                 <h4 className="font-display text-lg font-semibold text-brand-dark">
-                  Últimos 25 pedidos filtrados — {relatorio.nomeLoja}
+                  Pedidos recentes — {limparNomeLoja(relatorio.nomeLoja)}
+                  {statusFiltro ? ` (${formatarStatusPedido(statusFiltro)})` : ''}
                 </h4>
                 {relatorio.pedidos.length === 0 ? (
                   <p role="status" className="py-6 text-center text-sm text-text-default">
@@ -259,7 +309,7 @@ export function RelatoriosFinanceirosPage() {
                         <th className="py-2.5 pr-4">Cliente</th>
                         <th className="py-2.5 pr-4">Status</th>
                         <th className="py-2.5 pr-4">Data</th>
-                        <th className="py-2.5 text-right">Valor Total</th>
+                        <th className="py-2.5 text-right">Valor total</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-bg">

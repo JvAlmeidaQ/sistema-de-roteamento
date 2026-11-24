@@ -3,10 +3,21 @@
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Catálogo (RF07, RN01, RN07, RN09, RR04, RR13, RR18)
  */
+import {
+  AlertCircle,
+  CheckCircle2,
+  MapPin,
+  Plus,
+  Settings,
+  Store,
+  Tag,
+  UtensilsCrossed,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
+import { limparNomeLoja, limparNomeProduto } from '@/lib/apresentacao'
 import { usePainelLojista } from '../hooks/usePainelLojista'
 import { StatusFuncionamentoToggle } from './StatusFuncionamentoToggle'
 import { FormProdutoModal } from './FormProdutoModal'
@@ -126,20 +137,15 @@ export function PainelLojistaPage() {
 
   if (!loja) {
     return (
-      <div className="rounded-2xl border border-state-pending/30 bg-surface p-8 text-center shadow-low">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-state-pending/15 text-2xl text-brand-pit">
-          🏬
+      <div className="rounded-2xl border border-state-pending/30 bg-surface p-8 text-center">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-state-pending/15 text-brand-pit">
+          <Store className="h-7 w-7" aria-hidden="true" />
         </div>
-        <h2 className="mt-4 font-display text-xl font-bold text-brand-dark">
-          Painel de Gestão do Catálogo (Lojista)
+        <h2 className="mt-4 font-display text-xl font-semibold text-brand-dark">
+          Minha loja
         </h2>
         <p className="mt-2 text-sm text-text-default">
-          {erroLoja ||
-            'Nenhuma loja encontrada para o usuário atualmente selecionado na sessão.'}
-        </p>
-        <p className="mt-2 text-xs text-text-default">
-          Utilize o seletor <strong>Sessão (X-User-Id)</strong> no cabeçalho superior e escolha um
-          usuário com perfil de <strong>Lojista</strong> para gerenciar o catálogo.
+          {erroLoja || 'Nenhuma loja vinculada a esta conta.'}
         </p>
       </div>
     )
@@ -151,9 +157,12 @@ export function PainelLojistaPage() {
       {mensagemSucesso && (
         <div
           role="status"
-          className="flex items-center justify-between rounded-2xl border border-brand-green/30 bg-state-success/15 px-5 py-3 text-sm text-brand-dark shadow-xs"
+          className="flex items-center justify-between rounded-2xl border border-brand-green/30 bg-state-success/15 px-5 py-3 text-sm text-brand-dark"
         >
-          <span>✓ {mensagemSucesso}</span>
+          <span className="inline-flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-brand-green" aria-hidden="true" />
+            {mensagemSucesso}
+          </span>
           <button
             type="button"
             onClick={limparMensagens}
@@ -167,9 +176,12 @@ export function PainelLojistaPage() {
       {erroOperacao && (
         <div
           role="alert"
-          className="flex items-center justify-between rounded-2xl border border-state-error/30 bg-state-cancelled/15 px-5 py-3 text-sm text-state-error shadow-xs"
+          className="flex items-center justify-between rounded-2xl border border-state-error/30 bg-state-cancelled/15 px-5 py-3 text-sm text-state-error"
         >
-          <span>⚠️ {erroOperacao}</span>
+          <span className="inline-flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" aria-hidden="true" />
+            {erroOperacao}
+          </span>
           <button
             type="button"
             onClick={limparMensagens}
@@ -181,17 +193,20 @@ export function PainelLojistaPage() {
       )}
 
       {/* Cartão de Cabeçalho da Loja */}
-      <section className="rounded-2xl border border-surface-bg bg-surface p-6 shadow-low">
+      <section className="rounded-2xl border border-surface-bg bg-surface p-6">
         <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
             <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-display text-2xl font-bold text-brand-dark">{loja.nome}</h2>
+              <h2 className="font-display text-3xl font-semibold text-brand-dark">
+                {limparNomeLoja(loja.nome)}
+              </h2>
               <span className="rounded-full bg-surface-bg px-2.5 py-0.5 text-xs font-semibold text-text-default">
                 CNPJ: {loja.cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')}
               </span>
             </div>
-            <p className="mt-1 text-xs text-text-default">
-              📍 {loja.logradouro}, {loja.numero} {loja.complementoEndereco ? `(${loja.complementoEndereco})` : ''} — {loja.bairro}, {loja.cidade}/{loja.estado} (CEP: {loja.cep})
+            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-text-default">
+              <MapPin className="h-3.5 w-3.5 shrink-0 text-brand-outline" aria-hidden="true" />
+              {loja.logradouro}, {loja.numero} {loja.complementoEndereco ? `(${loja.complementoEndereco})` : ''} — {loja.bairro}, {loja.cidade}/{loja.estado} (CEP: {loja.cep})
             </p>
           </div>
 
@@ -205,20 +220,20 @@ export function PainelLojistaPage() {
         {/* Estatísticas Rápidas da Loja */}
         <div className="mt-6 grid grid-cols-2 gap-4 border-t border-surface-bg pt-4 sm:grid-cols-4">
           <div className="rounded-xl bg-surface-bg/40 p-3">
-            <span className="text-[11px] font-semibold text-text-default uppercase">Taxa de Entrega</span>
-            <p className="mt-0.5 text-base font-bold text-brand-dark">{formatarMoeda(loja.taxaEntrega)}</p>
+            <span className="text-[11px] font-semibold uppercase text-text-default">Taxa de entrega</span>
+            <p className="mt-0.5 text-base font-semibold text-brand-dark">{formatarMoeda(loja.taxaEntrega)}</p>
           </div>
           <div className="rounded-xl bg-surface-bg/40 p-3">
-            <span className="text-[11px] font-semibold text-text-default uppercase">Tempo Estimado</span>
-            <p className="mt-0.5 text-base font-bold text-brand-dark">{loja.tempoEntregaEstimado} min</p>
+            <span className="text-[11px] font-semibold uppercase text-text-default">Tempo estimado</span>
+            <p className="mt-0.5 text-base font-semibold text-brand-dark">{loja.tempoEntregaEstimado} min</p>
           </div>
           <div className="rounded-xl bg-surface-bg/40 p-3">
-            <span className="text-[11px] font-semibold text-text-default uppercase">Total de Categorias</span>
-            <p className="mt-0.5 text-base font-bold text-brand-dark">{categorias.length}</p>
+            <span className="text-[11px] font-semibold uppercase text-text-default">Categorias</span>
+            <p className="mt-0.5 text-base font-semibold text-brand-dark">{categorias.length}</p>
           </div>
           <div className="rounded-xl bg-surface-bg/40 p-3">
-            <span className="text-[11px] font-semibold text-text-default uppercase">Total de Produtos</span>
-            <p className="mt-0.5 text-base font-bold text-brand-dark">{totalProdutosSemFiltroTexto}</p>
+            <span className="text-[11px] font-semibold uppercase text-text-default">Produtos exibidos</span>
+            <p className="mt-0.5 text-base font-semibold text-brand-dark">{totalProdutosSemFiltroTexto}</p>
           </div>
         </div>
       </section>
@@ -236,7 +251,8 @@ export function PainelLojistaPage() {
               : 'border-transparent text-text-default hover:text-brand-dark'
           }`}
         >
-          🍔 Produtos do Catálogo
+          <UtensilsCrossed className="h-4 w-4" aria-hidden="true" />
+          Produtos
           <span className="rounded-full bg-surface-bg px-2 py-0.5 text-xs">{produtos.length}</span>
         </button>
 
@@ -251,7 +267,8 @@ export function PainelLojistaPage() {
               : 'border-transparent text-text-default hover:text-brand-dark'
           }`}
         >
-          🏷️ Categorias
+          <Tag className="h-4 w-4" aria-hidden="true" />
+          Categorias
           <span className="rounded-full bg-surface-bg px-2 py-0.5 text-xs">{categorias.length}</span>
         </button>
 
@@ -260,13 +277,14 @@ export function PainelLojistaPage() {
           role="tab"
           aria-selected={abaAtiva === 'configuracoes'}
           onClick={() => setAbaAtiva('configuracoes')}
-          className={`shrink-0 border-b-2 px-4 py-3 text-sm font-semibold transition-colors sm:px-6 ${
+          className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-colors sm:px-6 ${
             abaAtiva === 'configuracoes'
               ? 'border-brand-lime text-brand-dark'
               : 'border-transparent text-text-default hover:text-brand-dark'
           }`}
         >
-          ⚙️ Configurações da Loja
+          <Settings className="h-4 w-4" aria-hidden="true" />
+          Configurações
         </button>
       </div>
 
@@ -322,10 +340,10 @@ export function PainelLojistaPage() {
                   type="button"
                   onClick={() => setFiltroAtivo('inativo')}
                   className={`rounded-full px-3 py-1 font-semibold transition-all ${
-                    filtroAtivo === 'inativo' ? 'bg-surface text-brand-dark shadow-xs' : 'text-text-default'
+                    filtroAtivo === 'inativo' ? 'bg-surface text-brand-dark' : 'text-text-default'
                   }`}
                 >
-                  Pausados (RF07)
+                  Pausados
                 </button>
               </div>
             </div>
@@ -333,9 +351,10 @@ export function PainelLojistaPage() {
             <button
               type="button"
               onClick={abrirModalNovoProduto}
-              className="inline-flex items-center justify-center gap-1.5 rounded-full bg-brand-lime px-5 py-2 text-xs font-semibold text-brand-dark shadow-low transition-all hover:bg-brand-green/30"
+              className="inline-flex items-center justify-center gap-1.5 rounded-full bg-brand-lime px-5 py-2 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
             >
-              + Novo Produto
+              <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+              Novo produto
             </button>
           </div>
 
@@ -362,7 +381,7 @@ export function PainelLojistaPage() {
                   <div>
                     <div className="flex items-start justify-between gap-2">
                       <h4 className="font-display text-base font-semibold text-brand-dark">
-                        {produto.nome}
+                        {limparNomeProduto(produto.nome)}
                       </h4>
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
@@ -371,7 +390,7 @@ export function PainelLojistaPage() {
                             : 'bg-state-cancelled/15 text-state-error'
                         }`}
                       >
-                        {produto.ativo ? 'Disponível' : 'Pausado (RF07)'}
+                        {produto.ativo ? 'Disponível' : 'Pausado'}
                       </span>
                     </div>
 
@@ -392,7 +411,7 @@ export function PainelLojistaPage() {
                   </div>
 
                   <div className="mt-5 flex items-center justify-between border-t border-surface-bg pt-3">
-                    <span className="font-display text-base font-bold text-brand-dark">
+                    <span className="font-display text-base font-semibold text-brand-dark">
                       {formatarMoeda(produto.preco)}
                     </span>
 
@@ -406,7 +425,7 @@ export function PainelLojistaPage() {
                             ? 'border border-state-cancelled/40 text-state-error hover:bg-state-cancelled/10'
                             : 'border border-brand-green/40 bg-brand-lime/30 text-brand-dark hover:bg-brand-lime'
                         }`}
-                        title="Pausar ou reativar venda deste produto (RF07)"
+                        title="Pausar ou reativar venda deste produto"
                       >
                         {alternandoProdutoId === produto.idProduto
                           ? 'Atualizando...'
@@ -455,21 +474,22 @@ export function PainelLojistaPage() {
               <button
                 type="submit"
                 disabled={salvando}
-                className="rounded-full bg-brand-lime px-6 py-2 text-xs font-semibold text-brand-dark shadow-low transition-all hover:bg-brand-green/30 disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-full bg-brand-lime px-6 py-2 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80 disabled:opacity-50"
               >
-                {salvando ? 'Salvando...' : '+ Criar Categoria'}
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                {salvando ? 'Salvando...' : 'Criar categoria'}
               </button>
             </form>
           </div>
 
           {/* Tabela de Categorias */}
-          <div className="overflow-hidden rounded-2xl border border-surface-bg bg-surface shadow-xs">
+          <div className="overflow-hidden rounded-2xl border border-surface-bg bg-surface">
             <div className="border-b border-surface-bg px-6 py-4">
               <h3 className="font-display text-base font-semibold text-brand-dark">
-                Categorias Cadastradas na Loja
+                Categorias da loja
               </h3>
               <p className="text-xs text-text-default">
-                Regra RR18: Categorias que forem a única classificação de algum produto não podem ser excluídas até que os produtos sejam reclassificados.
+                Categorias que forem a única classificação de algum produto não podem ser excluídas até que ele seja reclassificado.
               </p>
             </div>
 
@@ -501,7 +521,7 @@ export function PainelLojistaPage() {
                         }
                       }}
                       className="rounded-full px-3 py-1 text-xs font-semibold text-state-error hover:bg-state-cancelled/10 transition-colors disabled:opacity-50"
-                      title="Excluir categoria (RR18 validado no backend)"
+                      title="Excluir categoria"
                     >
                       Excluir
                     </button>
@@ -558,7 +578,7 @@ export function PainelLojistaPage() {
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="loja-tempo" className="block text-xs font-semibold text-brand-dark">
-                  Tempo Estimado (min) * — <span className="text-[11px] text-text-default">RR13: &gt; 0</span>
+                  Tempo estimado (min) *
                 </label>
                 <input
                     id="loja-tempo"
@@ -578,7 +598,7 @@ export function PainelLojistaPage() {
 
               <div>
                 <label htmlFor="loja-taxa" className="block text-xs font-semibold text-brand-dark">
-                  Taxa de Entrega (R$) * — <span className="text-[11px] text-text-default">RR13: &gt;= 0</span>
+                  Taxa de entrega (R$) *
                 </label>
                 <input
                     id="loja-taxa"

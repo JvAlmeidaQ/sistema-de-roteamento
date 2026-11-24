@@ -5,7 +5,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { CheckCircle2 } from 'lucide-react'
 import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
+import { limparNomeLoja } from '@/lib/apresentacao'
 import { extrairMensagemErro, pedidosApi } from '../api/comercio.api'
 import { useCheckoutCatalogo } from '../hooks/useCheckoutCatalogo'
 import { type CriarPedidoFormValues, criarPedidoSchema } from '../schemas/comercio.schemas'
@@ -130,25 +132,13 @@ export function NovoPedidoPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="font-display text-3xl font-semibold text-brand-dark">
-            Novo Pedido & Checkout (RF02)
-          </h2>
-          <p className="mt-1 text-sm text-text-default">
-            Carrinho de loja única (RN07) com snapshots no servidor (RR09/RR10) e validação
-            transacional no PostgreSQL.
-          </p>
-        </div>
-        {usuarioAtual && !usuarioAtual.perfilCliente && (
-          <div
-            role="status"
-            aria-live="polite"
-            className="rounded-2xl border border-state-pending/50 bg-state-pending/15 px-4 py-2 text-xs font-semibold text-brand-pit"
-          >
-            Sessão atual é Lojista. Troque para um Cliente no seletor superior para enviar pedidos.
-          </div>
-        )}
+      <div>
+        <h2 className="font-display text-3xl font-semibold text-brand-dark">
+          Fazer pedido
+        </h2>
+        <p className="mt-1 text-sm text-text-default">
+          Escolha uma loja aberta, monte seu carrinho e finalize o pedido.
+        </p>
       </div>
 
       {erroExibido && (
@@ -164,15 +154,16 @@ export function NovoPedidoPage() {
         <div
           role="status"
           aria-live="polite"
-          className="rounded-2xl border border-state-success/40 bg-surface p-5 shadow-low"
+          className="rounded-2xl border border-state-success/40 bg-surface p-5"
         >
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <span className="text-xs font-semibold uppercase tracking-wide text-brand-green">
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-brand-green">
+                <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                 Pedido registrado com sucesso
               </span>
-              <h3 className="font-display text-xl font-semibold text-brand-dark">
-                Pedido {formatarIdPedido(pedidoCriado.idPedido)} · {pedidoCriado.nomeLoja}
+              <h3 className="mt-0.5 font-display text-xl font-semibold text-brand-dark">
+                {formatarIdPedido(pedidoCriado.idPedido)} · {limparNomeLoja(pedidoCriado.nomeLoja)}
               </h3>
             </div>
             <StatusBadge status={pedidoCriado.status} />
@@ -182,7 +173,7 @@ export function NovoPedidoPage() {
             {pedidoCriado.complementoEntrega ? ` (${pedidoCriado.complementoEntrega})` : ''}
           </p>
           <p className="mt-1 text-xs text-text-default">
-            Snapshots (RR09/RR10): Subtotal {formatarMoeda(pedidoCriado.subtotal)} + Entrega{' '}
+            Subtotal {formatarMoeda(pedidoCriado.subtotal)} + Entrega{' '}
             {formatarMoeda(pedidoCriado.taxaEntrega)} + Serviço{' '}
             {formatarMoeda(pedidoCriado.taxaServico)} ={' '}
             <strong className="text-brand-dark">{formatarMoeda(pedidoCriado.valorTotal)}</strong>
