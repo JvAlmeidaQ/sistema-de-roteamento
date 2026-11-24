@@ -25,6 +25,8 @@ const EntrarPage = lazy(() => import('@/features/identidade/components/EntrarPag
 const PerfisListaPage = lazy(() => import('@/features/identidade/components/PerfisListaPage'))
 const PerfilDetalhePage = lazy(() => import('@/features/identidade/components/PerfilDetalhePage'))
 const PerfilFormPage = lazy(() => import('@/features/identidade/components/PerfilFormPage'))
+const AuditoriaRastreioPage = lazy(() => import('@/features/auditoria/components/AuditoriaRastreioPage'))
+const AuditoriaSlaPage = lazy(() => import('@/features/auditoria/components/AuditoriaSlaPage'))
 
 function RotaProtegida({
   papeisPermitidos,
@@ -133,6 +135,26 @@ export function AppRoutes() {
               <RotaProtegida papeisPermitidos={['cliente', 'lojista', 'entregador', 'admin']}>
                 <Suspense fallback={<p role="status">Carregando rastreio...</p>}>
                   <RastreioPedido />
+                </Suspense>
+              </RotaProtegida>
+            )}
+          />
+          <Route
+            path="/auditoria"
+            element={(
+              <RotaProtegida papeisPermitidos={['cliente', 'lojista', 'entregador', 'admin']}>
+                <Suspense fallback={<p role="status">Carregando histórico de auditoria...</p>}>
+                  <AuditoriaRastreioPage />
+                </Suspense>
+              </RotaProtegida>
+            )}
+          />
+          <Route
+            path="/auditoria/sla"
+            element={(
+              <RotaProtegida papeisPermitidos={['lojista', 'entregador', 'admin']}>
+                <Suspense fallback={<p role="status">Carregando painel de SLA...</p>}>
+                  <AuditoriaSlaPage />
                 </Suspense>
               </RotaProtegida>
             )}

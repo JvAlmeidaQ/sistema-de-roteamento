@@ -6,7 +6,7 @@ O sistema conecta **Clientes**, **Lojistas** e **Entregadores** em um fluxo comp
 
 ---
 
-## Equipe — Grupo 10
+## Equipe
 
 | Integrante | Matrícula |
 | :--- | :--- |

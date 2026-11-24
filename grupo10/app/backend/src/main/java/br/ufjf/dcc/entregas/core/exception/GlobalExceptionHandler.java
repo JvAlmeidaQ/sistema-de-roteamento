@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -53,6 +54,16 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RequisicaoInvalidaException.class)
     public ResponseEntity<ApiErrorResponse> handleRequisicaoInvalida(RequisicaoInvalidaException ex) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessage(), null, List.of());
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiErrorResponse> handleMethodNotAllowed(HttpRequestMethodNotSupportedException ex) {
+        return build(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                "Método HTTP não permitido para este recurso.",
+                null,
+                List.of()
+        );
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

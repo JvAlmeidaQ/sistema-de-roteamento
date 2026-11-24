@@ -75,9 +75,14 @@ export function NavbarComercio() {
               )}
 
               {papelAtivo === 'entregador' && (
-                <NavLink to="/painel-entregador" className={linkClass}>
-                  Entregas
-                </NavLink>
+                <>
+                  <NavLink to="/painel-entregador" className={linkClass}>
+                    Entregas
+                  </NavLink>
+                  <NavLink to="/auditoria/sla" className={linkClass}>
+                    Meu SLA
+                  </NavLink>
+                </>
               )}
 
               {papelAtivo === 'lojista' && (
@@ -91,6 +96,9 @@ export function NavbarComercio() {
                   <NavLink to="/relatorios" className={linkClass}>
                     Relatórios
                   </NavLink>
+                  <NavLink to="/auditoria/sla" className={linkClass}>
+                    SLA Entregas
+                  </NavLink>
                 </>
               )}
 
@@ -98,6 +106,12 @@ export function NavbarComercio() {
                 <>
                   <NavLink to="/relatorios" className={linkClass}>
                     Financeiro
+                  </NavLink>
+                  <NavLink to="/auditoria" end className={linkClass}>
+                    Auditoria
+                  </NavLink>
+                  <NavLink to="/auditoria/sla" className={linkClass}>
+                    SLA Entregas
                   </NavLink>
                   <NavLink to="/perfis" className={linkClass}>
                     Perfis
