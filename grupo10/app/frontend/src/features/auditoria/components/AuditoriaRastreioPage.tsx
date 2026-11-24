@@ -3,6 +3,7 @@
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Auditoria — RF05 (rastreio passo a passo de Pedido e Entrega)
  */
+import { ArrowRight } from 'lucide-react'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -82,29 +83,27 @@ export default function AuditoriaRastreioPage() {
     return []
   })()
 
-  const resumoPedido = rastreioPedido.linhaTempo[0]
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <p className="text-xs font-semibold text-text-default">Auditoria</p>
-          <h2 className="text-3xl">Rastreamento e Histórico</h2>
+          <h2 className="text-3xl font-semibold text-brand-dark">Rastreamento e histórico</h2>
           <p className="text-sm text-text-default">
-            Consulte a trilha cronológica imutável de um pedido ou de uma entrega.
+            Consulte a trilha cronológica de um pedido ou de uma entrega.
           </p>
         </div>
         {papelAtivo !== 'cliente' && (
           <Link
             to="/auditoria/sla"
-            className="rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40"
+            className="inline-flex items-center gap-1.5 rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
           >
-            Painel de SLA de Entregas →
+            Painel de SLA de entregas
+            <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </Link>
         )}
       </header>
 
-      <section className="rounded-2xl border border-surface-bg bg-surface p-6 shadow-low">
+      <section className="rounded-2xl border border-surface-bg bg-surface p-6">
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="grid gap-4 md:grid-cols-12 md:items-end">
           <div className="md:col-span-4">
             <label htmlFor="rastreio-tipo" className="block text-xs font-semibold text-brand-dark">
@@ -137,7 +136,7 @@ export default function AuditoriaRastreioPage() {
           <div className="md:col-span-3">
             <button
               type="submit"
-              className="w-full rounded-full bg-brand-lime px-5 py-2.5 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40"
+              className="w-full rounded-full bg-brand-lime px-5 py-2.5 text-sm font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
             >
               Consultar trilha
             </button>
@@ -163,19 +162,14 @@ export default function AuditoriaRastreioPage() {
       )}
 
       {!carregando && !erro && consultaAtiva && (
-        <section className="space-y-5 rounded-2xl border border-surface-bg bg-surface p-6 shadow-low">
+        <section className="space-y-5 rounded-2xl border border-surface-bg bg-surface p-6">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-surface-bg pb-4">
             <div>
-              <h3 className="text-lg">
+              <h3 className="text-lg font-semibold text-brand-dark">
                 {consultaAtiva.tipo === 'pedido'
                   ? formatarCodigoPedido(consultaAtiva.id)
                   : `Entrega ${consultaAtiva.id}`}
               </h3>
-              {resumoPedido && consultaAtiva.tipo === 'pedido' && (
-                <p className="text-xs text-text-default tabular-nums">
-                  Loja #{resumoPedido.idLoja} · Cliente #{resumoPedido.idCliente}
-                </p>
-              )}
             </div>
 
             {consultaAtiva.tipo === 'pedido' && (

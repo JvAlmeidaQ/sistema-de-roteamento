@@ -3,6 +3,7 @@
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Auditoria — RF10 (painel de SLA e pontualidade de entregas)
  */
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -59,11 +60,14 @@ export default function AuditoriaSlaPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
-          <Link to="/auditoria" className="text-sm font-semibold text-brand-outline hover:underline">
-            ← Rastreamento e Histórico
-          </Link>
-          <h2 className="text-3xl">
-            {papelAtivo === 'entregador' ? 'Meu SLA de Entregas' : 'Auditoria de SLA de Entregas'}
+          {papelAtivo === 'admin' && (
+            <Link to="/auditoria" className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-outline hover:underline">
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+              Rastreamento e Histórico
+            </Link>
+          )}
+          <h2 className="text-3xl font-semibold text-brand-dark">
+            {papelAtivo === 'entregador' ? 'Meu SLA de entregas' : 'Auditoria de SLA de entregas'}
           </h2>
           <p className="text-sm text-text-default">
             {papelAtivo === 'entregador'
@@ -74,7 +78,7 @@ export default function AuditoriaSlaPage() {
       </header>
 
       {/* Filtros contextuais */}
-      <section className="rounded-2xl border border-surface-bg bg-surface p-6 shadow-low">
+      <section className="rounded-2xl border border-surface-bg bg-surface p-6">
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-4">
           <div className={`grid gap-4 ${mostrarFiltroLoja ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
             {mostrarFiltroLoja && (
@@ -119,7 +123,7 @@ export default function AuditoriaSlaPage() {
               </button>
               <button
                 type="submit"
-                className="rounded-full bg-brand-lime px-5 py-2 text-xs font-semibold text-brand-dark shadow-low hover:bg-brand-green/40"
+                className="rounded-full bg-brand-lime px-5 py-2 text-xs font-semibold text-brand-dark transition-colors hover:bg-brand-lime/80"
               >
                 Aplicar filtros
               </button>
@@ -130,23 +134,23 @@ export default function AuditoriaSlaPage() {
 
       {/* Cards de resumo */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-surface-bg bg-surface p-5 shadow-low">
+        <div className="rounded-2xl border border-surface-bg bg-surface p-5">
           <p className="text-xs font-semibold text-text-default">Entregas auditadas</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-brand-dark">{metricas.total}</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-brand-dark">{metricas.total}</p>
         </div>
-        <div className="rounded-2xl border border-surface-bg bg-surface p-5 shadow-low">
+        <div className="rounded-2xl border border-surface-bg bg-surface p-5">
           <p className="text-xs font-semibold text-text-default">Entregas atrasadas</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-state-error">{metricas.atrasadas}</p>
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-state-error">{metricas.atrasadas}</p>
         </div>
-        <div className="rounded-2xl border border-surface-bg bg-surface p-5 shadow-low">
+        <div className="rounded-2xl border border-surface-bg bg-surface p-5">
           <p className="text-xs font-semibold text-text-default">Pontualidade (SLA)</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-brand-dark">
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-brand-dark">
             {metricas.taxaPontualidade.toFixed(1)}%
           </p>
         </div>
-        <div className="rounded-2xl border border-surface-bg bg-surface p-5 shadow-low">
+        <div className="rounded-2xl border border-surface-bg bg-surface p-5">
           <p className="text-xs font-semibold text-text-default">Desvio médio</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-brand-dark">
+          <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-brand-dark">
             {metricas.desvioMedio > 0 ? '+' : ''}
             {metricas.desvioMedio.toFixed(1)} min
           </p>
@@ -154,7 +158,7 @@ export default function AuditoriaSlaPage() {
       </div>
 
       {/* Tabela de resultados */}
-      <section className="overflow-hidden rounded-2xl border border-surface-bg bg-surface shadow-low">
+      <section className="overflow-hidden rounded-2xl border border-surface-bg bg-surface">
         {carregando ? (
           <div className="p-6" role="status" aria-label="Carregando relatório de SLA">
             <div className="h-48 animate-pulse rounded-2xl bg-surface-bg/60 motion-reduce:animate-none" />
@@ -193,7 +197,6 @@ export default function AuditoriaSlaPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span className="font-semibold text-brand-dark">{limparNomeLoja(item.nomeLoja)}</span>
-                      <span className="block text-xs text-text-default tabular-nums">Loja {item.idLoja}</span>
                     </td>
                     <td className="px-5 py-3 text-xs tabular-nums">{formatarDataHora(item.previsaoEntrega)}</td>
                     <td className="px-5 py-3 text-xs tabular-nums">{formatarDataHora(item.entregueEm)}</td>
@@ -203,9 +206,10 @@ export default function AuditoriaSlaPage() {
                     <td className="px-5 py-3 text-right">
                       <Link
                         to={`/auditoria?tipo=pedido&id=${item.idPedido}`}
-                        className="text-xs font-semibold text-brand-outline hover:underline"
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-brand-outline hover:underline"
                       >
-                        Ver linha do tempo →
+                        Ver linha do tempo
+                        <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
                       </Link>
                     </td>
                   </tr>
