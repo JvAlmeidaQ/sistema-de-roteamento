@@ -2,7 +2,7 @@
  * Disciplinas: DCC060 (Banco de Dados) & DCC061 (Engenharia de Software)
  * Subdomínio: Comércio e Finanças
  */
-import { NavLink } from 'react-router-dom'
+import { Link, NavLink } from 'react-router-dom'
 import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
 import type { UsuarioSessao } from '../types/comercio.types'
 
@@ -68,6 +68,11 @@ export function NavbarComercio() {
               Painel do entregador
             </NavLink>
           )}
+          {!isBd && (
+            <NavLink to="/perfis" className={linkClass}>
+              Perfis (RF01)
+            </NavLink>
+          )}
         </nav>
 
         <div className="w-full min-w-0 max-w-full space-y-2 sm:w-auto">
@@ -95,6 +100,14 @@ export function NavbarComercio() {
                 </option>
               ))}
             </select>
+            {!isBd && usuarioAtual && (
+              <Link
+                to={`/perfis/${usuarioAtual.idPessoa}`}
+                className="rounded-full border border-white/30 px-3 py-1 text-xs font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                Meu perfil
+              </Link>
+            )}
           </div>
           {errosUsuarios.length > 0 && (
             <div id="erros-sessao" role="alert" className="max-w-sm space-y-1 rounded-lg border border-white/20 bg-white/10 px-3 py-2 wrap-anywhere text-xs">

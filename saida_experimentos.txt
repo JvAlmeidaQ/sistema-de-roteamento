@@ -1,0 +1,182 @@
+CREATE TYPE
+CREATE TYPE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TYPE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TYPE
+CREATE TYPE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TYPE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+ setseed 
+---------
+ 
+(1 row)
+
+BEGIN
+INSERT 0 300
+INSERT 0 330
+INSERT 0 280
+INSERT 0 20
+INSERT 0 50
+INSERT 0 300
+INSERT 0 75
+INSERT 0 120
+INSERT 0 120
+INSERT 0 120
+INSERT 0 220
+UPDATE 215
+COMMIT
+BEGIN
+INSERT 0 120
+INSERT 0 600
+INSERT 0 600
+INSERT 0 720
+COMMIT
+BEGIN
+SELECT 200000
+SELECT 404714
+INSERT 0 200000
+INSERT 0 404714
+INSERT 0 28539
+INSERT 0 1500
+INSERT 0 1500
+COMMIT
+BEGIN
+SELECT 51315
+DO
+SELECT 28731
+SELECT 14366
+INSERT 0 51315
+COMMIT
+BEGIN
+INSERT 0 57130
+INSERT 0 599627
+INSERT 0 108681
+INSERT 0 28539
+COMMIT
+ANALYZE
+INSERT 0 200000
+INSERT 0 200000
+INSERT 0 200000
+INSERT 0 200000
+INSERT 0 20000
+ANALYZE
+ANALYZE
+ANALYZE
+ANALYZE
+     tabela      | linhas 
+-----------------+--------
+ pessoa_endereco | 200350
+ telefone        | 220495
+ pessoa          | 200300
+ endereco        | 200330
+(4 rows)
+
+===== ANTES DOS ÍNDICES =====
+--- Experimento 1: pessoas vinculadas a um endereço ---
+                                                          QUERY PLAN                                                          
+------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.42..3789.81 rows=1 width=33) (actual time=0.013..5.275 rows=2.00 loops=1)
+   Buffers: shared hit=1285
+   ->  Seq Scan on pessoa_endereco pe  (cost=0.00..3781.38 rows=1 width=13) (actual time=0.009..5.267 rows=2.00 loops=1)
+         Filter: (id_endereco = 101)
+         Rows Removed by Filter: 200348
+         Buffers: shared hit=1277
+   ->  Index Scan using pk_pessoa on pessoa p  (cost=0.42..8.44 rows=1 width=28) (actual time=0.002..0.002 rows=1.00 loops=2)
+         Index Cond: (id_pessoa = pe.id_pessoa)
+         Index Searches: 2
+         Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=36 read=4
+ Planning Time: 0.215 ms
+ Execution Time: 5.287 ms
+(14 rows)
+
+--- Experimento 2: busca de pessoa pelo nome ---
+                                              QUERY PLAN                                               
+-------------------------------------------------------------------------------------------------------
+ Seq Scan on pessoa  (cost=0.00..4803.75 rows=1 width=49) (actual time=3.244..6.367 rows=1.00 loops=1)
+   Filter: ((nome)::text = 'Ana Silva 100000'::text)
+   Rows Removed by Filter: 200299
+   Buffers: shared hit=2300
+ Planning Time: 0.026 ms
+ Execution Time: 6.372 ms
+(6 rows)
+
+--- Experimento 3: telefones do tipo celular ---
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Seq Scan on telefone  (cost=0.00..4161.19 rows=200180 width=19) (actual time=0.005..10.320 rows=200300.00 loops=1)
+   Filter: (tipo = 'celular'::tipo_telefone)
+   Rows Removed by Filter: 20195
+   Buffers: shared hit=1405
+ Planning:
+   Buffers: shared hit=8
+ Planning Time: 0.036 ms
+ Execution Time: 13.959 ms
+(8 rows)
+
+CREATE INDEX
+CREATE INDEX
+CREATE INDEX
+===== DEPOIS DOS ÍNDICES =====
+--- Experimento 1: pessoas vinculadas a um endereço ---
+                                                                        QUERY PLAN                                                                         
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop  (cost=0.84..16.88 rows=1 width=33) (actual time=0.018..0.021 rows=2.00 loops=1)
+   Buffers: shared hit=10 read=3
+   ->  Index Scan using idx_pessoa_endereco_endereco on pessoa_endereco pe  (cost=0.42..8.44 rows=1 width=13) (actual time=0.012..0.013 rows=2.00 loops=1)
+         Index Cond: (id_endereco = 101)
+         Index Searches: 1
+         Buffers: shared hit=2 read=3
+   ->  Index Scan using pk_pessoa on pessoa p  (cost=0.42..8.44 rows=1 width=28) (actual time=0.002..0.002 rows=1.00 loops=2)
+         Index Cond: (id_pessoa = pe.id_pessoa)
+         Index Searches: 2
+         Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=55 read=2
+ Planning Time: 0.205 ms
+ Execution Time: 0.034 ms
+(14 rows)
+
+--- Experimento 2: busca de pessoa pelo nome ---
+                                                         QUERY PLAN                                                         
+----------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_pessoa_nome on pessoa  (cost=0.42..8.44 rows=1 width=49) (actual time=0.019..0.019 rows=1.00 loops=1)
+   Index Cond: ((nome)::text = 'Ana Silva 100000'::text)
+   Index Searches: 1
+   Buffers: shared hit=1 read=3
+ Planning Time: 0.021 ms
+ Execution Time: 0.022 ms
+(6 rows)
+
+--- Experimento 3: telefones do tipo celular ---
+                                                     QUERY PLAN                                                     
+--------------------------------------------------------------------------------------------------------------------
+ Seq Scan on telefone  (cost=0.00..4161.19 rows=200180 width=19) (actual time=0.006..10.461 rows=200300.00 loops=1)
+   Filter: (tipo = 'celular'::tipo_telefone)
+   Rows Removed by Filter: 20195
+   Buffers: shared hit=1405
+ Planning:
+   Buffers: shared hit=16 read=1
+ Planning Time: 0.045 ms
+ Execution Time: 14.124 ms
+(8 rows)
+
