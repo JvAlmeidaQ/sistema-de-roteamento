@@ -11,7 +11,7 @@ import { StatusBadge, formatarDataHora, formatarIdPedido, formatarMoeda } from '
 import { VisaoResumoFinanceiroTable } from './VisaoResumoFinanceiroTable'
 
 export function RelatoriosFinanceirosPage() {
-  const { usuarioAtual, selecionarUsuario } = useSessaoUsuario()
+  const { usuarioAtual } = useSessaoUsuario()
   const {
     resumoLojas,
     lojas,
@@ -128,25 +128,6 @@ export function RelatoriosFinanceirosPage() {
 
       {aba === 'parametrizado' && (
         <section className="space-y-5">
-          {lojaSelecionada && !ehLojistaDono && (
-            <div
-              role="status"
-              aria-live="polite"
-              className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-state-pending/50 bg-state-pending/15 px-4 py-3 text-xs text-brand-pit"
-            >
-              <span>
-                Apenas o lojista proprietário (#{lojaSelecionada.idLojista}) pode consultar os
-                pedidos detalhados desta loja (HTTP 403 se consultado por outro usuário).
-              </span>
-              <button
-                type="button"
-                onClick={() => selecionarUsuario(lojaSelecionada.idLojista)}
-                className="rounded-full bg-brand-dark px-3.5 py-1.5 font-semibold text-white"
-              >
-                Assumir sessão do Lojista #{lojaSelecionada.idLojista}
-              </button>
-            </div>
-          )}
 
           <div className="flex flex-wrap items-end gap-4 rounded-2xl border border-surface-bg bg-surface p-6">
             <div>
