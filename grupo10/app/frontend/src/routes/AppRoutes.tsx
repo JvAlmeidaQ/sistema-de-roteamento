@@ -23,6 +23,16 @@ const PainelEntregadorPage = !isBd
 const RastreioPedido = !isBd
   ? lazy(() => import('@/features/logistica/components/RastreioPedido'))
   : null
+// Subdomínio Identidade e Contato (RF01) — exclusivo de ES
+const PerfisListaPage = !isBd
+  ? lazy(() => import('@/features/identidade/components/PerfisListaPage'))
+  : null
+const PerfilDetalhePage = !isBd
+  ? lazy(() => import('@/features/identidade/components/PerfilDetalhePage'))
+  : null
+const PerfilFormPage = !isBd
+  ? lazy(() => import('@/features/identidade/components/PerfilFormPage'))
+  : null
 
 export function AppRoutes() {
   return (
@@ -62,6 +72,42 @@ export function AppRoutes() {
                 </Suspense>
               )}
             />
+          )}
+          {PerfisListaPage && PerfilDetalhePage && PerfilFormPage && (
+            <>
+              <Route
+                path="/perfis"
+                element={(
+                  <Suspense fallback={<p role="status">Carregando perfis…</p>}>
+                    <PerfisListaPage />
+                  </Suspense>
+                )}
+              />
+              <Route
+                path="/perfis/novo"
+                element={(
+                  <Suspense fallback={<p role="status">Carregando formulário…</p>}>
+                    <PerfilFormPage />
+                  </Suspense>
+                )}
+              />
+              <Route
+                path="/perfis/:id"
+                element={(
+                  <Suspense fallback={<p role="status">Carregando perfil…</p>}>
+                    <PerfilDetalhePage />
+                  </Suspense>
+                )}
+              />
+              <Route
+                path="/perfis/:id/editar"
+                element={(
+                  <Suspense fallback={<p role="status">Carregando formulário…</p>}>
+                    <PerfilFormPage />
+                  </Suspense>
+                )}
+              />
+            </>
           )}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
