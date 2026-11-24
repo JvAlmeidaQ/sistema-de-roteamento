@@ -121,7 +121,7 @@ class LogisticaConcorrenciaIntegrationTest {
                 .findFirst().orElseThrow();
         assertThat(objectMapper.readTree(recusada.corpo()).path("message").asText())
                 .as("Motivo do 422 para a entrega %d", recusada.tentativa().idEntrega())
-                .contains("RN02");
+                .contains("limite de 2 entregas");
         var aceitas = resultados.stream()
                 .filter(resultado -> resultado.statusHttp() == NO_CONTENT.value())
                 .map(resultado -> resultado.tentativa().idEntrega())

@@ -33,7 +33,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = "app.security.admin-user-ids=1")
 @AutoConfigureMockMvc
 @Transactional
 class IdentidadeIntegrationTest {
@@ -79,8 +79,12 @@ class IdentidadeIntegrationTest {
                 .andExpect(jsonPath("$.cpf").value(CPF_A))
                 .andExpect(jsonPath("$.email").value("ana.teste@exemplo.com"));
 
-        // A listagem (vw_perfil_pessoa) encontra a pessoa pelo CPF
+        // Sem X-User-Id ou usuário comum -> 403; administrador (id=1) -> 200
         mockMvc.perform(get("/api/identidade/pessoas").param("busca", CPF_A))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/identidade/pessoas").header("X-User-Id", idPessoa).param("busca", CPF_A))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/identidade/pessoas").header("X-User-Id", 1L).param("busca", CPF_A))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].idPessoa").value(idPessoa))
@@ -112,7 +116,7 @@ class IdentidadeIntegrationTest {
         cpfInvalido.put("cliente", true);
         criar(cpfInvalido)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value(containsString("RN11")));
+                .andExpect(jsonPath("$.message").value(containsString("CPF inválido")));
 
         ObjectNode cnpjInvalido = perfilBase(CPF_C, "cnpj.invalido@exemplo.com");
         cnpjInvalido.put("lojista", true);
@@ -146,14 +150,14 @@ class IdentidadeIntegrationTest {
         semPapel.set("enderecos", objectMapper.createArrayNode());
         criar(semPapel)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value(containsString("RR16")));
+                .andExpect(jsonPath("$.message").value(containsString("papel")));
 
         ObjectNode semTelefone = perfilBase(CPF_A, "sem.telefone@exemplo.com");
         semTelefone.put("cliente", true);
         semTelefone.set("telefones", objectMapper.createArrayNode());
         criar(semTelefone)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value(containsString("RR17")));
+                .andExpect(jsonPath("$.message").value(containsString("telefone")));
 
         ObjectNode clienteSemAtual = perfilBase(CPF_A, "sem.atual@exemplo.com");
         clienteSemAtual.put("cliente", true);
@@ -170,7 +174,7 @@ class IdentidadeIntegrationTest {
         lojistaSemLoja.set("enderecos", objectMapper.createArrayNode());
         criar(lojistaSemLoja)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value(containsString("RR01")));
+                .andExpect(jsonPath("$.message").value(containsString("primeira loja")));
     }
 
     // ------------------------------------------------------------------ endereços (RR12)
@@ -294,7 +298,7 @@ class IdentidadeIntegrationTest {
         semLojista.put("tipoVeiculo", "bicicleta");
         editar(idLojista, semLojista)
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.message").value(containsString("RR01")));
+                .andExpect(jsonPath("$.message").value(containsString("loja vinculada")));
 
         Long idEntregador = dsl.select(ROTA.ID_ENTREGADOR).from(ROTA).limit(1).fetchOneInto(Long.class);
         assertThat(idEntregador).isNotNull();
@@ -312,6 +316,58 @@ class IdentidadeIntegrationTest {
             semEntregador.set("enderecos", enderecos);
         }
         editar(idEntregador, semEntregador).andExpect(status().isUnprocessableEntity());
+    }
+
+    @Test
+    @DisplayName("Autenticação: verifica disponibilidade, entra por e-mail/CPF e consulta sessão")
+    void deveAutenticarEVerificarDisponibilidade() throws Exception {
+        ObjectNode payload = perfilBase(CPF_A, "login.teste@exemplo.com");
+        payload.put("cliente", true);
+        JsonNode criado = lerJson(criar(payload).andExpect(status().isCreated()));
+        long idPessoa = criado.get("idPessoa").asLong();
+
+        // Disponibilidade: e-mail e CPF já cadastrados -> false; novos -> true
+        mockMvc.perform(get("/api/identidade/autenticacao/disponibilidade")
+                        .param("email", "LOGIN.TESTE@exemplo.com")
+                        .param("cpf", CPF_A))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailDisponivel").value(false))
+                .andExpect(jsonPath("$.cpfDisponivel").value(false));
+
+        mockMvc.perform(get("/api/identidade/autenticacao/disponibilidade")
+                        .param("email", "livre.teste@exemplo.com")
+                        .param("cpf", CPF_B))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.emailDisponivel").value(true))
+                .andExpect(jsonPath("$.cpfDisponivel").value(true));
+
+        // Entrar por e-mail
+        mockMvc.perform(post("/api/identidade/autenticacao/entrar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identificador\":\"login.teste@exemplo.com\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPessoa").value(idPessoa))
+                .andExpect(jsonPath("$.perfilCliente").value(true));
+
+        // Entrar por CPF formatado
+        mockMvc.perform(post("/api/identidade/autenticacao/entrar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identificador\":\"" + CPF_A + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPessoa").value(idPessoa));
+
+        // Conta inexistente -> 404
+        mockMvc.perform(post("/api/identidade/autenticacao/entrar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identificador\":\"nao.existe@exemplo.com\"}"))
+                .andExpect(status().isNotFound());
+
+        // Sessão exige X-User-Id
+        mockMvc.perform(get("/api/identidade/autenticacao/sessao"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/identidade/autenticacao/sessao").header("X-User-Id", idPessoa))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPessoa").value(idPessoa));
     }
 
     // ------------------------------------------------------------------ apoio
