@@ -1,163 +1,188 @@
 # Sistema de Roteamento de Pedidos — DCC060 & DCC061
 
-Projeto integrado unindo o trabalho prático de **Banco de Dados (DCC060)** e as práticas de **Engenharia de Software (DCC061)** — UFJF.
+Plataforma web de entregas locais desenvolvida pelo **Grupo 10** para as disciplinas de **Banco de Dados (DCC060)** e **Engenharia de Software (DCC061)** — Universidade Federal de Juiz de Fora (UFJF).
+
+O sistema conecta **Clientes**, **Lojistas** e **Entregadores** em um fluxo completo: catálogo de lojas e produtos, realização de pedidos, controle de preparo, roteamento e rastreamento de entregas, divisão financeira e avaliações pós-entrega.
 
 ---
 
-## 👋 Bem-vindo(a)! Por onde começar?
+## Equipe — Grupo 10
 
-Este repositório guarda o nosso **Sistema de Roteamento de Pedidos** — uma plataforma de entregas locais (parecida com o iFood), onde clientes fazem pedidos em lojas parceiras e entregadores realizam as entregas organizadas em rotas.
-
-Se você acabou de chegar ao projeto (seja como integrante do grupo, professor ou avaliador), não precisa abrir todos os arquivos de uma vez. Preparamos abaixo um **roteiro simples de leitura** para você entender tudo passo a passo, sem complicação.
-
-### 🧭 Roteiro Recomendado de Leitura (Passo a Passo)
-
-1. **Primeiro, entenda as palavras que usamos:** Comece pelo **[Glossário de Domínio](./docs/es/glossario_de_dominio.md)**. Ele funciona como um pequeno dicionário do nosso negócio e explica o que significa cada termo (o que é um *Pedido*, uma *Entrega*, uma *Rota*, a *Taxa de Serviço*, etc.).
-2. **Depois, veja como o sistema funciona como um todo:** Leia o **[Modelo de Domínio](./docs/es/modelo_dominio.md)** e os **[Casos de Uso](./docs/es/casos_de_uso.md)**. Eles mostram quem usa o sistema (Cliente, Lojista e Entregador), como essas partes se conectam e quais são as etapas pelas quais um pedido passa desde a compra até chegar na casa do cliente.
-3. **Em seguida, conheça o que é guardado no banco:** O **[Dicionário de Dados](./docs/es/dicionario_dados.md)** lista todas as fichas/tabelas de informação que o sistema salva (dados de pessoas, lojas, produtos, pedidos e histórico).
-4. **Entenda o "porquê" das nossas escolhas:** Na pasta de **[Decisões do Projeto (ADRs)](./docs/es/adrs/README.md)**, contamos a história por trás das decisões mais importantes que tomamos e por que descartamos outras ideias.
-5. **Veja as regras do jogo e como evitamos erros:** A **[Especificação de Validações](./docs/es/especificacao_validacoes.md)** mostra todas as regras que o sistema fiscaliza (por exemplo: não deixar fazer pedido em loja fechada ou não deixar uma rota ter mais de duas entregas).
+| Integrante | Matrícula |
+| :--- | :--- |
+| João Vitor Almeida Queiroz | `202435007` |
+| Arthur de Souza Marques | `202435015` |
+| Gustavo Bersan Moreira Campos | `202435019` |
+| Murilo Lacerda Dutra | `202435023` |
+| Theo Carvalho de Faria | `202435037` |
 
 ---
 
-### 📂 Mapa dos Arquivos `.md` (O que tem em cada documento?)
+## Pré-requisitos
 
-Para facilitar sua busca, veja na tabela abaixo **qual pergunta cada arquivo responde**:
-
-| Arquivo | Qual pergunta ele responde? | O que você vai encontrar lá dentro |
-| :--- | :--- | :--- |
-| 📖 **[`glossario_de_dominio.md`](./docs/es/glossario_de_dominio.md)** | *"O que significa cada palavra neste projeto?"* | Explicação simples de 22 termos usados no sistema (como *Pedido*, *Entrega*, *Rota* e divisão de valores) para que todo mundo fale a mesma língua. |
-| 🧩 **[`modelo_dominio.md`](./docs/es/modelo_dominio.md)** | *"Como as partes do sistema se conectam?"* | Resumo do que o sistema faz, o que ficou de fora, como clientes, lojas e entregadores se relacionam e o passo a passo da vida de um pedido. |
-| 👥 **[`casos_de_uso.md`](./docs/es/casos_de_uso.md)** | *"O que cada pessoa pode fazer no sistema?"* | Um desenho visual mostrando as ações que o Cliente, o Lojista e o Entregador podem realizar na plataforma. |
-| 🗄️ **[`dicionario_dados.md`](./docs/es/dicionario_dados.md)** | *"Quais informações o sistema guarda?"* | A lista completa de todas as tabelas e campos salvos no banco de dados (nomes, preços, endereços, notas de avaliação, etc.). |
-| 💡 **[`docs/es/adrs/`](./docs/es/adrs/README.md)** *(ADR-001 a 006)* | *"Por que o grupo decidiu fazer assim?"* | Seis textos curtos explicando o motivo das nossas escolhas principais (ex.: como garantimos que o preço de um pedido antigo nunca mude se a loja aumentar o preço depois). |
-| 🛡️ **[`especificacao_validacoes.md`](./docs/es/especificacao_validacoes.md)** | *"Como o sistema impede dados errados?"* | Lista de todas as travas de segurança e regras do negócio, explicando quem faz cada checagem e como testamos se está funcionando. |
-| ⚙️ **[`requisitos_nao_funcionais.md`](./docs/es/requisitos_nao_funcionais.md)** | *"Quais são os padrões de qualidade e segurança?"* | Regras sobre desempenho, proteção de senhas e funcionamento padronizado do ambiente da equipe. |
-| 🗺️ **[`matriz_rastreabilidade.md`](./docs/es/matriz_rastreabilidade.md)** | *"Onde cada pedido do trabalho foi entregue?"* | Um mapa que liga cada funcionalidade e regra exigida no trabalho diretamente aos arquivos onde ela foi construída. |
-| 📋 **[`PROJECT_MANAGEMENT.md`](./PROJECT_MANAGEMENT.md)** | *"Como a equipe se organiza e trabalha?"* | Nosso calendário de entregas, combinados de convivência do grupo e regras para começar e entregar cada tarefa no **[Quadro do GitHub Projects](https://github.com/users/JvAlmeidaQ/projects/1)**. |
+- **Docker** e **Docker Compose** (PostgreSQL 18)
+- **Java 21** e **Maven 3.9+**
+- **Node.js 20+** e **npm** *(opcional — necessário apenas para rodar o Front-end em modo desenvolvimento ou gerar novo bundle)*
 
 ---
 
-## 🛠️ Ambiente Local (Docker)
+## Como Executar o Sistema
 
-O projeto utiliza Docker Compose para executar uma instância local do PostgreSQL 18.
+### 1. Configurar variáveis de ambiente e iniciar o banco de dados
 
-### Configuração
-
-Antes de iniciar o banco pela primeira vez, crie o arquivo `.env` na raiz do projeto a partir do modelo `.env.example`:
+Na raiz do repositório, crie o arquivo `.env` a partir do modelo e suba o container do PostgreSQL:
 
 ```bash
 cp .env.example .env
+docker compose --env-file .env -f docker/docker-compose.yml up -d --wait
 ```
 
-*(Se quiser, você pode editar o `.env` para trocar a senha local do banco).*
+| Configuração do Banco | Valor |
+| :--- | :--- |
+| Host | `localhost` |
+| Porta | `5433` |
+| Database | `roteamento_db` |
+| Usuário | `sistemaRoteamento` |
+| Senha | Definida no arquivo `.env` |
 
-Para iniciar o PostgreSQL:
+### 2. Iniciar o Back-end (aplicação completa em `http://localhost:8080`)
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d
+cd grupo10/app/backend
+mvn spring-boot:run
 ```
 
-### Configuração do banco
+Ao iniciar, o Back-end:
+1. Aplica automaticamente as migrações SQL via **Flyway** (`01_esquema.sql`, `02_carga.sql`, `05_visoes.sql`, `06_triggers.sql`, `07_indices.sql`).
+2. Serve a API REST (`/api/...`) e a interface web compilada diretamente em **`http://localhost:8080`**.
 
-| Configuração | Valor               |
-| ------------ | ------------------- |
-| Host         | `localhost`         |
-| Porta        | `5432`              |
-| Database     | `roteamento_db`     |
-| Usuário      | `sistemaRoteamento` |
-| Senha        | definida no `.env`  |
+### 3. (Opcional) Rodar o Front-end em modo desenvolvimento
 
-O arquivo `.env` contém informações locais e não deve ser enviado ao Git. O arquivo `.env.example` serve como modelo e deve ser mantido no repositório.
-
-### Como testar os scripts SQL localmente
-
-Os scripts SQL ficam na pasta `grupo10/sql/` e aparecem automaticamente dentro do container no caminho `/docker-entrypoint-initdb.d/`:
-
-```text
-01_esquema.sql
-02_carga.sql
-03_verificacao.sql
-04_consultas.sql
-05_visoes.sql
-06_triggers.sql
-07_indices.sql
-```
-
-Você pode testar seus scripts de duas formas:
-
-#### Opção 1: Executar um arquivo `.sql` específico (ideal enquanto você está escrevendo o código)
-Como a pasta `grupo10/sql/` está espelhada dentro do container, qualquer alteração que você salvar no seu editor pode ser testada na hora rodando:
+Caso queira executar o servidor de desenvolvimento do Vite com *hot reload* (com proxy para a API na porta `8080`):
 
 ```bash
-# Exemplo: testar o 01_esquema.sql
-docker exec -it postgres-dev psql \
-  -U sistemaRoteamento \
-  -d roteamento_db \
-  -v ON_ERROR_STOP=1 \
-  -f /docker-entrypoint-initdb.d/01_esquema.sql
-
-# Exemplo: testar o 03_verificacao.sql
-docker exec -it postgres-dev psql \
-  -U sistemaRoteamento \
-  -d roteamento_db \
-  -v ON_ERROR_STOP=1 \
-  -f /docker-entrypoint-initdb.d/03_verificacao.sql
+cd grupo10/app/frontend
+npm install
+npm run dev
 ```
 
-#### Opção 2: Recriar o banco do zero (para testar todos os scripts em sequência)
-> A execução automática de todos os scripts só acontece quando o banco é criado pela primeira vez. Se você alterou os arquivos SQL e quer testar tudo rodando do zero em um banco limpo, apague o volume com `-v` e suba novamente:
+Para gerar uma nova build de produção (que atualiza os arquivos estáticos servidos pelo Spring Boot em `grupo10/app/backend/src/main/resources/static/`):
 
 ```bash
-docker compose -f docker/docker-compose.yml down -v
-docker compose -f docker/docker-compose.yml up -d
+cd grupo10/app/frontend
+npm run build
 ```
 
-#### Comandos úteis para inspecionar o banco manualmente (`psql`)
+---
 
-Para abrir o terminal interativo do banco:
+## Guia de Navegação no Sistema (Para Avaliação)
+
+Ao acessar **`http://localhost:8080`**, você será direcionado para a tela de entrada (`/entrar`).
+
+### 1. Entrada, Cadastro e Contas Multi-papel
+
+- **Entrar (`/entrar`):**
+  - Informe um **e-mail** ou **CPF** já cadastrado, **ou** escolha diretamente uma das contas listadas em **Contas cadastradas** (acesso rápido para avaliação de Cliente, Lojista e Entregador).
+- **Criar nova conta (`/cadastro`):**
+  - Permite cadastrar uma nova pessoa informando dados pessoais, telefones, endereços e escolhendo um ou mais papéis (**Cliente**, **Lojista** com primeira loja, **Entregador** com tipo de veículo).
+  - Se o e-mail ou CPF informado já existir, o sistema impede a duplicidade e direciona para a tela de entrada com o identificador preenchido.
+- **Troca de papel na sessão:**
+  - Contas que possuem mais de um papel exibem o seletor **Papel** no cabeçalho superior, permitindo alternar entre suas visões (ex.: `Cliente`, `Entregador`, `Lojista`) sem precisar sair da conta.
+
+### 2. Navegação por Papel
+
+Cada perfil visualiza exclusivamente suas telas e operações, com validação tanto na interface quanto nos endpoints do Back-end (`403 Forbidden` para acessos não autorizados):
+
+| Papel | Rotas Disponíveis | O que é possível fazer |
+| :--- | :--- | :--- |
+| **Cliente** | `/` (Lojas), `/pedidos` (Meus pedidos), `/rastreio/:id`, `/perfis/:id` | Escolher loja aberta, montar carrinho de loja única, escolher endereço e forma de pagamento, confirmar pagamento de pedidos aceitos, acompanhar linha do tempo da entrega e avaliar loja e entregador após a conclusão. |
+| **Lojista** | `/catalogo` (Minha loja), `/pedidos` (Pedidos), `/relatorios` (Relatórios), `/rastreio/:id`, `/perfis/:id` | Abrir/fechar a loja, cadastrar e pausar produtos, gerenciar categorias, aceitar/recusar pedidos, iniciar preparo, marcar pedido como pronto, calcular repasse financeiro e consultar relatórios e análises exclusivas da própria loja. |
+| **Entregador** | `/painel-entregador` (Entregas), `/rastreio/:id`, `/perfis/:id` | Visualizar entregas disponíveis (com região de destino), assumir até 2 entregas na rota atual, registrar retirada (*A caminho*) e finalizar entrega (*Entregue*), além de consultar rotas encerradas. |
+| **Administrador** | `/relatorios` (Financeiro), `/perfis` (Perfis), `/perfis/:id`, `/rastreio/:id` | Consultar o resumo financeiro consolidado de todas as lojas, filtrar relatórios por qualquer loja, executar análises gerenciais globais e buscar/inspecionar a listagem geral de perfis cadastrados. |
+
+### 3. Acesso Administrativo
+
+As contas administrativas são configuradas em `app.security.admin-user-ids` no arquivo [application.yml](./grupo10/app/backend/src/main/resources/application.yml) (correspondentes ao final das matrículas dos integrantes do grupo). Por segurança, essas contas **não aparecem no acesso rápido** e entram **exclusivamente digitando o CPF** na tela `/entrar`:
+
+- `00000000007` (João Vitor Almeida Queiroz)
+- `00000000015` (Arthur de Souza Marques)
+- `00000000019` (Gustavo Bersan Moreira Campos)
+- `00000000023` (Murilo Lacerda Dutra)
+- `00000000037` (Theo Carvalho de Faria)
+
+### 4. Roteiro Rápido Ponta a Ponta (5 passos)
+
+1. **Criar pedido (Cliente):** Entre com uma conta de **Cliente**, escolha uma loja **Aberta** em **Lojas**, adicione itens ao carrinho e clique em **Confirmar pedido**.
+2. **Aceitar pedido (Lojista):** Entre com o **Lojista** daquela loja, abra **Pedidos**, selecione o pedido criado e clique em **Aceitar pedido**.
+3. **Confirmar pagamento (Cliente):** Volte para a conta do **Cliente**, abra **Meus pedidos** e clique em **Confirmar pagamento**.
+4. **Preparar e liberar para entrega (Lojista):** Na conta do **Lojista**, clique em **Iniciar preparo** e depois em **Marcar como pronto**.
+5. **Assumir e concluir entrega (Entregador) + Avaliar (Cliente):** Entre com um **Entregador**, assuma a entrega disponível em **Entregas**, clique em **Registrar retirada** e depois em **Finalizar**. Por fim, com o **Cliente**, avalie a loja e o entregador em **Meus pedidos** (e confira o repasse financeiro com o **Lojista**).
+
+---
+
+## Testes Automatizados
+
+Com o PostgreSQL em execução na porta `5433`:
 
 ```bash
-docker exec -it postgres-dev psql -U sistemaRoteamento -d roteamento_db
+# Testes de integração do Back-end (JUnit 5 + MockMvc + PostgreSQL real)
+cd grupo10/app/backend
+mvn -B test
 ```
-
-Dentro do `psql`, você pode usar:
-
-```sql
-\dt   -- Lista as tabelas criadas
-\dv   -- Lista as views criadas
-\di   -- Lista os índices criados
-\q    -- Sai do terminal do banco
-```
-
-Para verificar os triggers cadastrados:
-
-```sql
-SELECT
-    event_object_table AS tabela,
-    trigger_name
-FROM information_schema.triggers
-ORDER BY event_object_table, trigger_name;
-```
-
-Para apenas desligar o container (mantendo os dados salvos):
 
 ```bash
-docker compose -f docker/docker-compose.yml down
+# Verificação de tipos TypeScript e build de produção do Front-end
+cd grupo10/app/frontend
+npm run build
 ```
 
-## 📦 Empacotamento de Entrega (DCC060)
+---
 
-O professor exige submissão estrita em formato compactado (`grupo10.zip`).
+## Documentação do Projeto
 
-Para gerar o pacote de submissão:
+| Documento | Conteúdo |
+| :--- | :--- |
+| **[`docs/es/DESIGN.md`](./docs/es/DESIGN.md)** | Identidade visual, paleta de cores, tipografia (`Fustat` e `Inter Tight`), componentes e diretrizes de UX. |
+| **[`docs/es/glossario_de_dominio.md`](./docs/es/glossario_de_dominio.md)** | Definições dos termos de negócio do domínio. |
+| **[`docs/es/modelo_dominio.md`](./docs/es/modelo_dominio.md)** | Visão geral do domínio e ciclo de vida dos pedidos e entregas. |
+| **[`docs/es/casos_de_uso.md`](./docs/es/casos_de_uso.md)** | Atores e casos de uso do sistema. |
+| **[`docs/es/dicionario_dados.md`](./docs/es/dicionario_dados.md)** | Estrutura completa das tabelas e atributos do banco de dados. |
+| **[`docs/es/especificacao_validacoes.md`](./docs/es/especificacao_validacoes.md)** | Regras de negócio, restrições e validações implementadas. |
+| **[`docs/es/requisitos_nao_funcionais.md`](./docs/es/requisitos_nao_funcionais.md)** | Padrões de qualidade, segurança e arquitetura. |
+| **[`docs/es/matriz_rastreabilidade.md`](./docs/es/matriz_rastreabilidade.md)** | Rastreabilidade entre requisitos, regras e artefatos de código. |
+| **[`PROJECT_MANAGEMENT.md`](./PROJECT_MANAGEMENT.md)** | Organização do grupo, fluxo de trabalho e sprints. |
+
+---
+
+## Scripts SQL e Empacotamento (DCC060)
+
+Os scripts SQL ficam em `grupo10/sql/` e são montados em `/sql/` (somente leitura) no container `postgres-dev`.
+
+Para executar scripts manualmente no `psql`:
+
+```bash
+docker exec -it postgres-dev psql -U sistemaRoteamento -d roteamento_db -v ON_ERROR_STOP=1 -f /sql/04_consultas.sql
+```
+
+Para recriar o banco do zero:
+
+```bash
+docker compose --env-file .env -f docker/docker-compose.yml down -v
+docker compose --env-file .env -f docker/docker-compose.yml up -d --wait
+```
+
+Para gerar o pacote de entrega da disciplina de Banco de Dados (`grupo10.zip`):
 
 ```bash
 ./package.sh
 ```
 
-## 🌿 Fluxo de Branches
+---
 
-* `main`: código e artefatos validados para as entregas oficiais.
-* `develop`: ambiente de integração contínua do grupo.
-* `feature/<nome-da-tarefa>`: branches de trabalho individuais criadas a partir de `develop`.
+## Fluxo de Branches
+
+- `main`: versões estáveis e validadas.
+- `develop`: integração contínua de Banco de Dados.
+- `release/es`: branch de integração do módulo de Engenharia de Software.
+- `release/bd`: branch de entrega do módulo de Banco de Dados.
+- `feat/*`, `refactor/*`, `fix/*`: branches de trabalho criadas a partir da respectiva branch de integração.
