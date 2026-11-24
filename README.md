@@ -98,7 +98,7 @@ Cada perfil visualiza exclusivamente suas telas e operações, com validação t
 | **Cliente** | `/` (Lojas), `/pedidos` (Meus pedidos), `/rastreio/:id`, `/perfis/:id` | Escolher loja aberta, montar carrinho de loja única, escolher endereço e forma de pagamento, confirmar pagamento de pedidos aceitos, acompanhar linha do tempo da entrega e avaliar loja e entregador após a conclusão. |
 | **Lojista** | `/catalogo` (Minha loja), `/pedidos` (Pedidos), `/relatorios` (Relatórios), `/rastreio/:id`, `/perfis/:id` | Abrir/fechar a loja, cadastrar e pausar produtos, gerenciar categorias, aceitar/recusar pedidos, iniciar preparo, marcar pedido como pronto, calcular repasse financeiro e consultar relatórios e análises exclusivas da própria loja. |
 | **Entregador** | `/painel-entregador` (Entregas), `/rastreio/:id`, `/perfis/:id` | Visualizar entregas disponíveis (com região de destino), assumir até 2 entregas na rota atual, registrar retirada (*A caminho*) e finalizar entrega (*Entregue*), além de consultar rotas encerradas. |
-| **Administrador** | `/relatorios` (Financeiro), `/perfis` (Perfis), `/perfis/:id`, `/rastreio/:id` | Consultar o resumo financeiro consolidado de todas as lojas, filtrar relatórios por qualquer loja, executar análises gerenciais globais e buscar/inspecionar a listagem geral de perfis cadastrados. |
+| **Administrador** | `/relatorios` (Financeiro), `/auditoria` (Auditoria e SLA), `/perfis` (Perfis), `/perfis/:id`, `/rastreio/:id` | Consultar o resumo financeiro consolidado de todas as lojas, filtrar relatórios por qualquer loja, executar análises gerenciais globais, inspecionar indicadores de SLA e histórico de entregas e buscar/inspecionar a listagem geral de perfis cadastrados. |
 
 ### 3. Acesso Administrativo
 
@@ -150,6 +150,8 @@ npm run build
 | **[`docs/es/especificacao_validacoes.md`](./docs/es/especificacao_validacoes.md)** | Regras de negócio, restrições e validações implementadas. |
 | **[`docs/es/requisitos_nao_funcionais.md`](./docs/es/requisitos_nao_funcionais.md)** | Padrões de qualidade, segurança e arquitetura. |
 | **[`docs/es/matriz_rastreabilidade.md`](./docs/es/matriz_rastreabilidade.md)** | Rastreabilidade entre requisitos, regras e artefatos de código. |
+| **[`docs/es/Doc_Engenharia_de_Software.pdf`](./docs/es/Doc_Engenharia_de_Software.pdf)** | Documento final consolidado da disciplina de Engenharia de Software (`DCC061`). |
+| **[`docs/es/Apresentacao_ES_Grupo10.pptx`](./docs/es/Apresentacao_ES_Grupo10.pptx)** | Apresentação oficial (v1) da entrega de Engenharia de Software. |
 | **[`PROJECT_MANAGEMENT.md`](./PROJECT_MANAGEMENT.md)** | Organização do grupo, fluxo de trabalho e sprints. |
 
 ---
