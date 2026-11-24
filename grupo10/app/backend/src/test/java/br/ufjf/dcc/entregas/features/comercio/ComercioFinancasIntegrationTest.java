@@ -555,9 +555,15 @@ class ComercioFinancasIntegrationTest {
             assertThat(linha.get("id_loja").asLong()).isEqualTo(1L);
         }
 
-        mockMvc.perform(get("/api/comercio/checkout/usuarios"))
+        String usuariosBody = mockMvc.perform(get("/api/comercio/checkout/usuarios"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].idPessoa").exists());
+                .andExpect(jsonPath("$[0].idPessoa").exists())
+                .andReturn().getResponse().getContentAsString();
+        JsonNode usuariosJson = objectMapper.readTree(usuariosBody);
+        for (JsonNode u : usuariosJson) {
+            assertThat(u.get("administrador").asBoolean()).isFalse();
+            assertThat(u.get("idPessoa").asLong()).isNotIn(7L, 15L, 19L, 23L, 37L);
+        }
 
         mockMvc.perform(get("/api/comercio/checkout/lojas"))
                 .andExpect(status().isOk())

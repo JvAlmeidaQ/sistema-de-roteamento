@@ -95,6 +95,9 @@ public class CheckoutConsultaRepository {
         Map<Long, UsuarioSessaoResponse> consolidado = new LinkedHashMap<>();
         for (var r : registros) {
             Long idPessoa = r.get(PESSOA.ID_PESSOA);
+            if (adminAccessService.isAdmin(idPessoa)) {
+                continue;
+            }
             if (!consolidado.containsKey(idPessoa)) {
                 consolidado.put(idPessoa, new UsuarioSessaoResponse(
                         idPessoa,
@@ -103,7 +106,7 @@ public class CheckoutConsultaRepository {
                         r.get(CLIENTE.ID_PESSOA) != null,
                         r.get(LOJISTA.ID_PESSOA) != null,
                         r.get(ENTREGADOR.ID_PESSOA) != null,
-                        adminAccessService.isAdmin(idPessoa),
+                        false,
                         r.get(LOJA.ID_LOJA),
                         r.get(LOJA.NOME)
                 ));

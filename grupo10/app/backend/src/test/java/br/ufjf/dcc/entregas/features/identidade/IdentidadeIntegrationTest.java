@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static br.ufjf.dcc.entregas.jooq.Tables.LOJA;
 import static br.ufjf.dcc.entregas.jooq.Tables.PEDIDO;
+import static br.ufjf.dcc.entregas.jooq.Tables.PESSOA;
 import static br.ufjf.dcc.entregas.jooq.Tables.PESSOA_ENDERECO;
 import static br.ufjf.dcc.entregas.jooq.Tables.ROTA;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -368,6 +369,20 @@ class IdentidadeIntegrationTest {
         mockMvc.perform(get("/api/identidade/autenticacao/sessao").header("X-User-Id", idPessoa))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.idPessoa").value(idPessoa));
+
+        // Conta administrativa (id=1 nos testes) entra por CPF (200) e é bloqueada por e-mail (403)
+        var adminPessoa = dsl.select(PESSOA.CPF, PESSOA.EMAIL).from(PESSOA).where(PESSOA.ID_PESSOA.eq(1L)).fetchOne();
+        assertThat(adminPessoa).isNotNull();
+        mockMvc.perform(post("/api/identidade/autenticacao/entrar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identificador\":\"" + adminPessoa.value2() + "\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/identidade/autenticacao/entrar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"identificador\":\"" + adminPessoa.value1() + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.idPessoa").value(1L))
+                .andExpect(jsonPath("$.administrador").value(true));
     }
 
     // ------------------------------------------------------------------ apoio

@@ -84,6 +84,9 @@ public class PerfilService {
                 .orElseThrow(() -> new RecursoNaoEncontradoException(
                         "Nenhuma conta encontrada com o e-mail ou CPF informado."
                 ));
+        if (adminAccessService.isAdmin(pessoa.getIdPessoa()) && emailNorm != null) {
+            throw new AcessoNegadoException("Contas administrativas devem entrar informando o CPF.");
+        }
         return montarSessaoAutenticada(pessoa);
     }
 

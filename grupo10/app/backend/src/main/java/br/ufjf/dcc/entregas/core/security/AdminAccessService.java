@@ -5,10 +5,8 @@
 package br.ufjf.dcc.entregas.core.security;
 
 import br.ufjf.dcc.entregas.core.exception.AcessoNegadoException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -21,11 +19,11 @@ public class AdminAccessService {
 
     private final Set<Long> adminUserIds;
 
-    public AdminAccessService(@Value("${app.security.admin-user-ids:}") List<Long> adminUserIds) {
-        if (adminUserIds == null) {
+    public AdminAccessService(AdminSecurityProperties properties) {
+        if (properties.getAdminUserIds() == null) {
             this.adminUserIds = Set.of();
         } else {
-            this.adminUserIds = adminUserIds.stream()
+            this.adminUserIds = properties.getAdminUserIds().stream()
                     .filter(Objects::nonNull)
                     .filter(id -> id > 0)
                     .collect(Collectors.toUnmodifiableSet());
