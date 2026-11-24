@@ -11,8 +11,8 @@ import jakarta.validation.constraints.Size;
 
 public record AvaliacaoRequest(
         @NotNull(message = "A nota da avaliação é obrigatória.")
-        @Min(value = 1, message = "RN06/RR15: A nota mínima é 1.")
-        @Max(value = 5, message = "RN06/RR15: A nota máxima é 5.")
+        @Min(value = 1, message = "A nota mínima é 1.")
+        @Max(value = 5, message = "A nota máxima é 5.")
         Short nota,
 
         @Size(max = 1000, message = "O comentário deve ter no máximo 1000 caracteres.")

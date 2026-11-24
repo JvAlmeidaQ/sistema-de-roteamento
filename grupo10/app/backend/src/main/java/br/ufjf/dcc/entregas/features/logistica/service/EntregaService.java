@@ -67,13 +67,13 @@ public class EntregaService {
         }
 
         if (entregaRepository.possuiEntregaAtivaAtrasada(idEntregador)) {
-            throw new RegraNegocioException("[RN03/RR05] Finalize a entrega em atraso antes de assumir outra.");
+            throw new RegraNegocioException("Finalize a entrega em atraso antes de assumir outra.");
         }
 
         long idRota = entregaRepository.buscarRotaAberta(idEntregador)
                 .map(rota -> {
                     if (rota.getVagas() <= 0) {
-                        throw new RegraNegocioException("[RN02/RR02] A rota já tem duas entregas vinculadas.");
+                        throw new RegraNegocioException("Você já atingiu o limite de 2 entregas na rota atual.");
                     }
                     return rota.getIdRota();
                 })
@@ -102,7 +102,7 @@ public class EntregaService {
         boolean permitida = (atual == StatusEntrega.aceita && destino == StatusEntrega.a_caminho)
                 || (atual == StatusEntrega.a_caminho && destino == StatusEntrega.entregue);
         if (!permitida) {
-            throw new RegraNegocioException("[RR06] Transição de entrega inválida: " + atual.getLiteral() + " → " + novoStatus + ".");
+            throw new RegraNegocioException("Esta atualização de status da entrega não é permitida.");
         }
 
         entregaRepository.atualizarStatus(idEntrega, destino);

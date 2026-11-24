@@ -58,12 +58,12 @@ public class PagamentoService {
         validarAutorizacaoAcesso(idUsuarioAutenticado, idPedido);
 
         if (divisaoPagamentoRepository.buscarPorPedido(idPedido).isPresent()) {
-            throw new ConflitoNegocioException("[RF09] A divisão de pagamento do pedido " + idPedido + " já foi registrada.");
+            throw new ConflitoNegocioException("A divisão de pagamento deste pedido já foi registrada.");
         }
 
         if (pedido.getStatus() != StatusPedido.concluido || !pedidoRepository.entregaEstaConcluida(idPedido)) {
             throw new RegraNegocioException(
-                    "[RN13/RR08] A divisão de pagamento só pode ser registrada após o pedido estar concluído com entrega realizada ('entregue')."
+                    "A divisão de pagamento só pode ser registrada após a entrega ser concluída."
             );
         }
 

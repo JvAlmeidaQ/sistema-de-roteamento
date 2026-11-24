@@ -161,7 +161,7 @@ public class PerfilService {
             throw new RequisicaoInvalidaException("CPF é obrigatório no cadastro.");
         }
         if (!DocumentoValidator.cpfValido(cpf)) {
-            throw new RegraNegocioException("[RN11] CPF inválido: os dígitos verificadores não conferem.");
+            throw new RegraNegocioException("CPF inválido: os dígitos verificadores não conferem.");
         }
         String nome = request.nome().trim();
         String email = normalizarEmail(request.email());
@@ -334,11 +334,11 @@ public class PerfilService {
     /** Regras que valem tanto para criação quanto para edição. */
     private void validarRegrasComuns(PerfilRequest request) {
         if (!request.cliente() && !request.lojista() && !request.entregador()) {
-            throw new RegraNegocioException("[RR16] A pessoa deve exercer ao menos um papel: Cliente, Lojista ou Entregador.");
+            throw new RegraNegocioException("Selecione ao menos um papel: Cliente, Lojista ou Entregador.");
         }
 
         if (request.telefones().isEmpty()) {
-            throw new RegraNegocioException("[RR17] Informe ao menos um telefone.");
+            throw new RegraNegocioException("Informe ao menos um telefone.");
         }
         Set<String> numeros = new HashSet<>();
         for (PerfilRequest.Telefone telefone : request.telefones()) {
@@ -372,7 +372,7 @@ public class PerfilService {
             throw new RegraNegocioException("Não é possível remover o papel de Cliente: a pessoa possui pedidos registrados.");
         }
         if (papeis.lojista() && !request.lojista() && repository.lojistaPossuiLojas(idPessoa)) {
-            throw new RegraNegocioException("[RR01] Não é possível remover o papel de Lojista: a pessoa é responsável por loja(s) cadastrada(s).");
+            throw new RegraNegocioException("Não é possível remover o papel de Lojista enquanto houver loja vinculada.");
         }
         if (papeis.entregador() && !request.entregador() && repository.entregadorPossuiRotas(idPessoa)) {
             throw new RegraNegocioException("Não é possível remover o papel de Entregador: a pessoa possui rotas registradas.");
@@ -388,10 +388,10 @@ public class PerfilService {
 
     private void validarPrimeiraLoja(PerfilRequest.LojaInicial loja) {
         if (loja == null) {
-            throw new RegraNegocioException("[RR01] Todo Lojista deve possuir ao menos uma loja: preencha os dados da primeira loja.");
+            throw new RegraNegocioException("Todo Lojista deve possuir ao menos uma loja: preencha os dados da primeira loja.");
         }
         if (!DocumentoValidator.cnpjValido(loja.cnpj())) {
-            throw new RegraNegocioException("[RN11] CNPJ inválido: os dígitos verificadores não conferem.");
+            throw new RegraNegocioException("CNPJ inválido: os dígitos verificadores não conferem.");
         }
         converterStatusFuncionamento(loja.statusFuncionamento());
         if (repository.existeCnpj(loja.cnpj())) {

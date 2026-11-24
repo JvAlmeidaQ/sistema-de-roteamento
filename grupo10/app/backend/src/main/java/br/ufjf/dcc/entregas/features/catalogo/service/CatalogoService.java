@@ -31,7 +31,7 @@ public class CatalogoService {
 
     public LojaResponse obterMinhaLoja(Long idLojista) {
         if (idLojista == null) {
-            throw new AcessoNegadoException("Usuário não identificado. Forneça o cabeçalho X-User-Id.");
+            throw new AcessoNegadoException("Identifique-se para acessar o painel da loja.");
         }
         return catalogoRepository.buscarLojaPorLojista(idLojista)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Nenhuma loja encontrada para o lojista " + idLojista));
@@ -90,7 +90,7 @@ public class CatalogoService {
 
         int produtosOrfaos = catalogoRepository.contarProdutosComApenasEstaCategoria(idLoja, idCategoria);
         if (produtosOrfaos > 0) {
-            throw new RegraNegocioException("[RR18] Não é permitido excluir categoria pois deixaria " + produtosOrfaos + " produto(s) sem nenhuma categoria associada. Reclassifique o produto antes de excluir.");
+            throw new RegraNegocioException("Não é permitido excluir esta categoria porque há " + produtosOrfaos + " produto(s) vinculados apenas a ela. Reclassifique-os antes de excluir.");
         }
 
         catalogoRepository.excluirCategoria(idCategoria, idLoja);
@@ -174,13 +174,13 @@ public class CatalogoService {
 
     private void validarPropriedadeLoja(Long idUsuarioAutenticado, Long idLoja) {
         if (idUsuarioAutenticado == null) {
-            throw new AcessoNegadoException("Usuário não identificado. Forneça o cabeçalho X-User-Id.");
+            throw new AcessoNegadoException("Identifique-se para realizar esta operação.");
         }
         LojaRecord loja = catalogoRepository.buscarLojaRecord(idLoja)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Loja " + idLoja + " não encontrada."));
 
         if (!loja.getIdLojista().equals(idUsuarioAutenticado)) {
-            throw new AcessoNegadoException("O usuário " + idUsuarioAutenticado + " não é o lojista proprietário da loja " + idLoja);
+            throw new AcessoNegadoException("Você não tem permissão para alterar esta loja.");
         }
     }
 
@@ -198,7 +198,7 @@ public class CatalogoService {
         }
         var validas = catalogoRepository.validarCategoriasPertencemALoja(idLoja, limpas);
         if (validas.size() != limpas.size()) {
-            throw new RegraNegocioException("[RN07] Uma ou mais categorias informadas não pertencem à loja " + idLoja);
+            throw new RegraNegocioException("Uma ou mais categorias informadas não pertencem à sua loja.");
         }
         return limpas;
     }

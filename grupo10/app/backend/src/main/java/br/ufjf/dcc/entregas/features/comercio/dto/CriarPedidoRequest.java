@@ -28,7 +28,7 @@ public record CriarPedidoRequest(
         @Size(max = 255, message = "A observação de entrega deve ter no máximo 255 caracteres.")
         String observacaoEntrega,
 
-        @NotEmpty(message = "RR19: O pedido deve conter ao menos um item.")
+        @NotEmpty(message = "O pedido deve conter ao menos um item.")
         @Size(max = 100, message = "O pedido pode conter no máximo 100 itens distintos.")
         List<@Valid ItemPedidoRequest> itens
 ) {
