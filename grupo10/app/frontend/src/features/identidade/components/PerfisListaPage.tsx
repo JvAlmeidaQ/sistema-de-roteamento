@@ -20,7 +20,7 @@ export default function PerfisListaPage() {
         <div>
           <h2 className="text-3xl">Perfis (RF01)</h2>
           <p className="text-sm">
-            Pessoas cadastradas e seus papéis de Cliente, Lojista e Entregador (especialização total e sobreposta — ADR-003).
+            Pessoas cadastradas e seus papéis de Cliente, Lojista e Entregador (especialização total e sobreposta — RR16).
           </p>
         </div>
         <Link
@@ -39,10 +39,11 @@ export default function PerfisListaPage() {
           <input
             id="busca-perfil"
             type="search"
+            maxLength={120}
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
             placeholder="Ex.: Ana, pessoa12@exemplo.com, 123.456…"
-            className="w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline"
+            className="w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline focus-visible:ring-2 focus-visible:ring-brand-outline/30"
           />
           {busca && (
             <button

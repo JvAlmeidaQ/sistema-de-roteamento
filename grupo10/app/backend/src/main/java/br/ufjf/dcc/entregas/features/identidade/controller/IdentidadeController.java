@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -45,8 +46,11 @@ public class IdentidadeController {
     }
 
     @GetMapping("/{idPessoa}")
-    public PerfilResponse buscar(@PathVariable @Positive Long idPessoa) {
-        return perfilService.buscarPerfil(idPessoa);
+    public PerfilResponse buscar(
+            @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
+            @PathVariable @Positive Long idPessoa
+    ) {
+        return perfilService.buscarPerfilAutorizado(idUsuarioAutenticado, idPessoa);
     }
 
     @PostMapping
@@ -57,9 +61,10 @@ public class IdentidadeController {
 
     @PutMapping("/{idPessoa}")
     public PerfilResponse atualizar(
+            @RequestHeader(value = "X-User-Id", required = false) Long idUsuarioAutenticado,
             @PathVariable @Positive Long idPessoa,
             @Valid @RequestBody PerfilRequest request
     ) {
-        return perfilService.atualizarPerfil(idPessoa, request);
+        return perfilService.atualizarPerfil(idUsuarioAutenticado, idPessoa, request);
     }
 }

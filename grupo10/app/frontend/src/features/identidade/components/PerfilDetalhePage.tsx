@@ -5,6 +5,7 @@
  */
 import type { ReactNode } from 'react'
 import { Link, useLocation, useParams } from 'react-router-dom'
+import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
 import { usePerfil } from '../hooks/usePerfis'
 import { ROTULO_TELEFONE, ROTULO_VEICULO, mascaraCep, mascaraCnpj, mascaraCpf, mascaraTelefone } from '../utils/formatadores'
 import { PapelBadges } from './PapelBadges'
@@ -23,9 +24,10 @@ function Cartao({ titulo, children, acao }: { titulo: string; children: ReactNod
 
 export default function PerfilDetalhePage() {
   const { id } = useParams()
+  const { usuarioAtual } = useSessaoUsuario()
   const idPessoa = Number(id)
   const valido = Number.isSafeInteger(idPessoa) && idPessoa > 0
-  const { perfil, carregando, erro } = usePerfil(valido ? idPessoa : null)
+  const { perfil, carregando, erro } = usePerfil(valido ? idPessoa : null, usuarioAtual?.idPessoa ?? null)
   const location = useLocation()
   const mensagemSucesso = (location.state as { mensagem?: string } | null)?.mensagem
 
@@ -47,12 +49,19 @@ export default function PerfilDetalhePage() {
     return (
       <div className="space-y-3">
         <p role="alert" className="rounded-2xl bg-state-error/10 px-4 py-3 text-sm text-state-error">
-          {erro?.status === 404 ? 'Pessoa não encontrada.' : erro?.mensagem ?? 'Não foi possível carregar o perfil.'}
+          {erro?.status === 403
+            ? 'Você só tem permissão para visualizar ou editar o seu próprio perfil. Selecione esta conta no seletor Sessão (X-User-Id) para continuar.'
+            : erro?.status === 404
+              ? 'Pessoa não encontrada.'
+              : erro?.mensagem ?? 'Não foi possível carregar o perfil.'}
         </p>
         <Link to="/perfis" className="text-sm font-semibold text-brand-outline hover:underline">← Voltar para a lista</Link>
       </div>
     )
   }
+
+  const ehProprioPerfil = usuarioAtual?.idPessoa === perfil.idPessoa
+  const podeAbrirPainelLojista = ehProprioPerfil && Boolean(usuarioAtual?.perfilLojista)
 
   return (
     <div className="space-y-6">
@@ -85,12 +94,14 @@ export default function PerfilDetalhePage() {
             </div>
           </dl>
         </div>
-        <Link
-          to={`/perfis/${perfil.idPessoa}/editar`}
-          className="rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40"
-        >
-          Editar perfil
-        </Link>
+        {ehProprioPerfil && (
+          <Link
+            to={`/perfis/${perfil.idPessoa}/editar`}
+            className="rounded-full bg-brand-lime px-5 py-2 text-sm font-semibold text-brand-dark shadow-low transition-colors hover:bg-brand-green/40"
+          >
+            Editar perfil
+          </Link>
+        )}
       </header>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -165,9 +176,11 @@ export default function PerfilDetalhePage() {
         <Cartao
           titulo={`Lojas (${perfil.lojas.length})`}
           acao={
-            <Link to="/catalogo" className="text-xs font-semibold text-brand-outline hover:underline">
-              Abrir Painel do Lojista →
-            </Link>
+            podeAbrirPainelLojista ? (
+              <Link to="/catalogo" className="text-xs font-semibold text-brand-outline hover:underline">
+                Abrir Painel do Lojista →
+              </Link>
+            ) : undefined
           }
         >
           <ul className="divide-y divide-surface-bg">

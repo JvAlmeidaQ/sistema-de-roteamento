@@ -44,7 +44,7 @@ public class PerfilRepository {
         this.dsl = dsl;
     }
 
-    /** Papéis atuais de uma pessoa (especialização total e sobreposta — ADR-003). */
+    /** Papéis atuais de uma pessoa (especialização total e sobreposta — RR16). */
     public record PapeisPessoa(
             boolean cliente,
             Long idEnderecoAtual,
@@ -272,7 +272,7 @@ public class PerfilRepository {
                 .execute();
     }
 
-    /** Atualiza apenas os dados particulares do morador (ADR-002), sem afetar outros vínculos. */
+    /** Atualiza apenas os dados particulares do morador (RR12), sem afetar outros vínculos. */
     public void atualizarVinculoEndereco(Long idPessoa, Long idEndereco, String apelido, String complemento, String referencia) {
         dsl.update(PESSOA_ENDERECO)
                 .set(PESSOA_ENDERECO.APELIDO, apelido)

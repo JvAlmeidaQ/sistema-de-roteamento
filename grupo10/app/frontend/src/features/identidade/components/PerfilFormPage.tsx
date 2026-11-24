@@ -2,12 +2,13 @@
  * Disciplina: DCC061 (Engenharia de Software)
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Identidade e Contato — RF01 (criação e edição de perfil)
- * Atende no cliente: RN10, RN11, RR01, RR12, RR14, RR16, RR17, ADR-002 e ADR-003
+ * Atende no cliente: RN10, RN11, RR01, RR03, RR12, RR14, RR16 e RR17
  */
 import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useFieldArray, useForm, type Path } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useSessaoUsuario } from '@/context/SessaoUsuarioContext'
 import { identidadeApi, lerErroApi, type ErroApi } from '../api/identidade.api'
 import { usePerfil } from '../hooks/usePerfis'
 import {
@@ -26,7 +27,7 @@ import {
 } from '../utils/formatadores'
 
 const inputClass =
-  'mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline read-only:bg-surface-bg/50 read-only:text-text-default'
+  'mt-1 w-full rounded-2xl border border-surface-bg bg-surface px-4 py-2 text-sm text-brand-dark outline-none focus:border-brand-outline focus-visible:ring-2 focus-visible:ring-brand-outline/30 read-only:bg-surface-bg/50 read-only:text-text-default'
 
 const mascaraUf = (valor: string) => valor.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2)
 const textoOuNulo = (valor: string) => (valor.trim() ? valor.trim() : null)
@@ -45,11 +46,12 @@ function Campo({ id, label, erro, children, className }: {
   className?: string
 }) {
   const mensagem = mensagemDe(erro)
+  const erroId = id && mensagem ? `${id}-erro` : undefined
   return (
     <div className={className}>
       <label htmlFor={id} className="block text-xs font-semibold text-brand-dark">{label}</label>
       {children}
-      {mensagem && <p className="mt-1 text-xs text-state-error">{mensagem}</p>}
+      {mensagem && <p id={erroId} role="alert" className="mt-1 text-xs text-state-error">{mensagem}</p>}
     </div>
   )
 }
@@ -166,10 +168,14 @@ function montarPayload(v: PerfilFormValues, perfil: Perfil | null): PerfilReques
 export default function PerfilFormPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { usuarioAtual } = useSessaoUsuario()
   const idPessoa = id ? Number(id) : null
   const modoEdicao = idPessoa !== null
   const idValido = !modoEdicao || (Number.isSafeInteger(idPessoa) && (idPessoa ?? 0) > 0)
-  const { perfil, carregando, erro: erroCarga } = usePerfil(modoEdicao && idValido ? idPessoa : null)
+  const { perfil, carregando, erro: erroCarga } = usePerfil(
+    modoEdicao && idValido ? idPessoa : null,
+    usuarioAtual?.idPessoa ?? null,
+  )
   const [erroApi, setErroApi] = useState<ErroApi | null>(null)
 
   const {
@@ -190,8 +196,13 @@ export default function PerfilFormPage() {
   const enderecos = useFieldArray({ control, name: 'enderecos' })
 
   useEffect(() => {
-    if (perfil) reset(valoresIniciais(perfil))
-  }, [perfil, reset])
+    if (!modoEdicao) {
+      reset(valoresIniciais(null))
+      setErroApi(null)
+    } else if (perfil) {
+      reset(valoresIniciais(perfil))
+    }
+  }, [modoEdicao, perfil, reset])
 
   const cliente = watch('cliente')
   const lojista = watch('lojista')
@@ -259,7 +270,11 @@ export default function PerfilFormPage() {
     return (
       <div className="space-y-3">
         <p role="alert" className="rounded-2xl bg-state-error/10 px-4 py-3 text-sm text-state-error">
-          {erroCarga?.status === 404 ? 'Pessoa não encontrada.' : erroCarga?.mensagem ?? 'Não foi possível carregar o perfil.'}
+          {erroCarga?.status === 403
+            ? 'Você só tem permissão para editar o seu próprio perfil. Selecione esta conta no seletor Sessão (X-User-Id) para continuar.'
+            : erroCarga?.status === 404
+              ? 'Pessoa não encontrada.'
+              : erroCarga?.mensagem ?? 'Não foi possível carregar o perfil.'}
         </p>
         <Link to="/perfis" className="text-sm font-semibold text-brand-outline hover:underline">← Voltar para a lista</Link>
       </div>
@@ -276,7 +291,7 @@ export default function PerfilFormPage() {
           ← {modoEdicao ? 'Voltar ao perfil' : 'Perfis'}
         </Link>
         <h2 className="text-3xl">{modoEdicao ? `Editar perfil — ${perfil?.nome}` : 'Novo perfil'}</h2>
-        <p className="text-sm">Campos com * são obrigatórios. Tudo é salvo em uma única transação (ADR-003).</p>
+        <p className="text-sm">Campos com * são obrigatórios. Tudo é salvo em uma única transação.</p>
       </header>
 
       {erroApi && (
@@ -319,7 +334,7 @@ export default function PerfilFormPage() {
       {/* ------------------------------------------------------------ Funções */}
       <Secao
         titulo="Funções"
-        descricao="RR16: escolha ao menos uma. A mesma pessoa pode acumular mais de uma função (ADR-003)."
+        descricao="RR16: escolha ao menos uma. A mesma pessoa pode acumular mais de uma função."
       >
         <div className="grid gap-3 md:grid-cols-3">
           {([

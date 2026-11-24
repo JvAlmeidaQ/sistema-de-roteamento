@@ -2,13 +2,14 @@
  * Disciplina: DCC061 (Engenharia de Software)
  * Subdomínio: Identidade e Contato
  * Implementa: RF01 (gerenciar dados pessoais, papéis, telefones, endereços e primeira loja do Lojista)
- * Atende: RN10, RN11, RR01, RR12, RR14, RR16, RR17, ADR-002, ADR-003
+ * Atende: RN10, RN11, RR01, RR03, RR12, RR14, RR16, RR17
  *
  * As cardinalidades mínimas RR01 (lojista com loja), RR16 (ao menos um papel) e RR17 (ao menos um
  * telefone) são verificadas aqui, na camada de aplicação, dentro de uma única transação.
  */
 package br.ufjf.dcc.entregas.features.identidade.service;
 
+import br.ufjf.dcc.entregas.core.exception.AcessoNegadoException;
 import br.ufjf.dcc.entregas.core.exception.ConflitoNegocioException;
 import br.ufjf.dcc.entregas.core.exception.RecursoNaoEncontradoException;
 import br.ufjf.dcc.entregas.core.exception.RegraNegocioException;
@@ -48,6 +49,20 @@ public class PerfilService {
 
     public List<PessoaResumoResponse> listarPessoas(String busca) {
         return repository.listarPessoas(busca);
+    }
+
+    private void validarProprietario(Long idUsuarioAutenticado, Long idPessoa) {
+        if (idUsuarioAutenticado == null || idUsuarioAutenticado <= 0) {
+            throw new AcessoNegadoException("Cabeçalho X-User-Id é obrigatório para acessar ou editar este perfil.");
+        }
+        if (!idUsuarioAutenticado.equals(idPessoa)) {
+            throw new AcessoNegadoException("Você só tem permissão para visualizar ou editar o seu próprio perfil.");
+        }
+    }
+
+    public PerfilResponse buscarPerfilAutorizado(Long idUsuarioAutenticado, Long idPessoa) {
+        validarProprietario(idUsuarioAutenticado, idPessoa);
+        return buscarPerfil(idPessoa);
     }
 
     public PerfilResponse buscarPerfil(Long idPessoa) {
@@ -109,12 +124,13 @@ public class PerfilService {
         repository.substituirTelefones(idPessoa, converterTelefones(request.telefones()));
 
         Long idEnderecoAtual = null;
+        Set<Long> vinculosCriados = new HashSet<>();
         for (PerfilRequest.Endereco endereco : request.enderecos()) {
             if (endereco.idEndereco() != null) {
                 throw new RegraNegocioException("No cadastro, todos os endereços devem ser informados por completo.");
             }
             Long idEndereco = criarOuReaproveitarEndereco(endereco);
-            if (repository.listarIdsEnderecosVinculados(idPessoa).contains(idEndereco)) {
+            if (!vinculosCriados.add(idEndereco)) {
                 throw new RegraNegocioException("O mesmo endereço foi informado mais de uma vez.");
             }
             repository.vincularEndereco(idPessoa, idEndereco,
@@ -144,7 +160,8 @@ public class PerfilService {
     // ================================================================== edição
 
     @Transactional
-    public PerfilResponse atualizarPerfil(Long idPessoa, PerfilRequest request) {
+    public PerfilResponse atualizarPerfil(Long idUsuarioAutenticado, Long idPessoa, PerfilRequest request) {
+        validarProprietario(idUsuarioAutenticado, idPessoa);
         PessoaRecord pessoa = repository.buscarPessoa(idPessoa)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Pessoa " + idPessoa + " não encontrada."));
         if (request.cpf() != null && !request.cpf().isBlank() && !request.cpf().equals(pessoa.getCpf())) {

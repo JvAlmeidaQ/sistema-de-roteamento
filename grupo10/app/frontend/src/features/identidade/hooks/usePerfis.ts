@@ -37,13 +37,15 @@ export function usePessoas(busca: string) {
 }
 
 /** Carrega o perfil completo de uma pessoa (idPessoa null = nada a carregar). */
-export function usePerfil(idPessoa: number | null) {
+export function usePerfil(idPessoa: number | null, idUsuarioSessao?: number | null) {
   const [perfil, setPerfil] = useState<Perfil | null>(null)
   const [carregando, setCarregando] = useState(idPessoa !== null)
   const [erro, setErro] = useState<ErroApi | null>(null)
 
   useEffect(() => {
     if (idPessoa === null) {
+      setPerfil(null)
+      setErro(null)
       setCarregando(false)
       return
     }
@@ -53,12 +55,16 @@ export function usePerfil(idPessoa: number | null) {
     identidadeApi
       .buscarPerfil(idPessoa)
       .then((dados) => ativo && setPerfil(dados))
-      .catch((e: unknown) => ativo && setErro(lerErroApi(e)))
+      .catch((e: unknown) => {
+        if (!ativo) return
+        setPerfil(null)
+        setErro(lerErroApi(e))
+      })
       .finally(() => ativo && setCarregando(false))
     return () => {
       ativo = false
     }
-  }, [idPessoa])
+  }, [idPessoa, idUsuarioSessao])
 
   return { perfil, carregando, erro }
 }

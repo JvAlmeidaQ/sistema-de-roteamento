@@ -1,7 +1,7 @@
 /**
  * Disciplina: DCC061 (Engenharia de Software)
  * Subdomínio: Identidade e Contato
- * Verifica: RF01, RN10, RN11, RR01, RR12, RR16, RR17, ADR-002 e ADR-003 pela API /api/identidade/pessoas
+ * Verifica: RF01, RN10, RN11, RR01, RR03, RR12, RR16, RR17 pela API /api/identidade/pessoas
  */
 package br.ufjf.dcc.entregas.features.identidade;
 
@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static br.ufjf.dcc.entregas.jooq.Tables.LOJA;
 import static br.ufjf.dcc.entregas.jooq.Tables.PEDIDO;
 import static br.ufjf.dcc.entregas.jooq.Tables.PESSOA_ENDERECO;
+import static br.ufjf.dcc.entregas.jooq.Tables.ROTA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
@@ -55,7 +56,7 @@ class IdentidadeIntegrationTest {
     // ------------------------------------------------------------------ criação
 
     @Test
-    @DisplayName("RF01/ADR-003: cria pessoa com papéis sobrepostos (Cliente + Entregador), telefone e endereço atual")
+    @DisplayName("RF01/RR16: cria pessoa com papéis sobrepostos (Cliente + Entregador), telefone e endereço atual")
     void deveCriarPerfilComPapeisSobrepostos() throws Exception {
         ObjectNode payload = perfilBase(CPF_A, "ana.teste@exemplo.com");
         payload.put("cliente", true);
@@ -73,7 +74,7 @@ class IdentidadeIntegrationTest {
         assertThat(criado.get("enderecos").get(0).get("atual").asBoolean()).isTrue();
 
         long idPessoa = criado.get("idPessoa").asLong();
-        mockMvc.perform(get("/api/identidade/pessoas/{id}", idPessoa))
+        mockMvc.perform(get("/api/identidade/pessoas/{id}", idPessoa).header("X-User-Id", idPessoa))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.cpf").value(CPF_A))
                 .andExpect(jsonPath("$.email").value("ana.teste@exemplo.com"));
@@ -172,10 +173,10 @@ class IdentidadeIntegrationTest {
                 .andExpect(jsonPath("$.message").value(containsString("RR01")));
     }
 
-    // ------------------------------------------------------------------ endereços (ADR-002 / RR12)
+    // ------------------------------------------------------------------ endereços (RR12)
 
     @Test
-    @DisplayName("ADR-002: endereço físico é compartilhado e o complemento é isolado por morador")
+    @DisplayName("RR12: endereço físico é compartilhado e o complemento é isolado por morador")
     void deveCompartilharEnderecoEIsolarComplemento() throws Exception {
         ObjectNode moradorA = perfilBase(CPF_A, "morador.a@exemplo.com");
         moradorA.put("cliente", true);
@@ -236,16 +237,43 @@ class IdentidadeIntegrationTest {
         edicao.put("cpf", CPF_B);
         editar(perfil.get("idPessoa").asLong(), edicao).andExpect(status().isBadRequest());
 
-        mockMvc.perform(get("/api/identidade/pessoas/{id}", 999_999_999L))
+        mockMvc.perform(get("/api/identidade/pessoas/{id}", 999_999_999L).header("X-User-Id", 999_999_999L))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @DisplayName("RF01/RR01: impede remover papel de Cliente com pedidos e de Lojista com loja")
+    @DisplayName("RF01: restringe visualização e edição de perfil ao próprio X-User-Id (403)")
+    void deveBloquearAcessoDeTerceiroAoPerfil() throws Exception {
+        ObjectNode payload = perfilBase(CPF_A, "dono@exemplo.com");
+        payload.put("cliente", true);
+        JsonNode perfil = lerJson(criar(payload).andExpect(status().isCreated()));
+        long idPessoa = perfil.get("idPessoa").asLong();
+        long outroUsuario = idPessoa + 1L;
+
+        // Sem X-User-Id -> 403
+        mockMvc.perform(get("/api/identidade/pessoas/{id}", idPessoa))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/identidade/pessoas/{id}", idPessoa)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(paraRequest(perfil))))
+                .andExpect(status().isForbidden());
+
+        // Outro usuário -> 403
+        mockMvc.perform(get("/api/identidade/pessoas/{id}", idPessoa).header("X-User-Id", outroUsuario))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/identidade/pessoas/{id}", idPessoa)
+                        .header("X-User-Id", outroUsuario)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(paraRequest(perfil))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("RF01/RR01: impede remover papel de Cliente com pedidos, Lojista com loja e Entregador com rotas")
     void deveImpedirRemocaoDePapelComHistorico() throws Exception {
         Long idCliente = dsl.select(PEDIDO.ID_CLIENTE).from(PEDIDO).limit(1).fetchOneInto(Long.class);
         assertThat(idCliente).isNotNull();
-        JsonNode perfilCliente = lerJson(mockMvc.perform(get("/api/identidade/pessoas/{id}", idCliente))
+        JsonNode perfilCliente = lerJson(mockMvc.perform(get("/api/identidade/pessoas/{id}", idCliente).header("X-User-Id", idCliente))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.restricoes.clienteComPedidos").value(true)));
 
@@ -257,7 +285,7 @@ class IdentidadeIntegrationTest {
         editar(idCliente, semCliente).andExpect(status().isUnprocessableEntity());
 
         Long idLojista = dsl.select(LOJA.ID_LOJISTA).from(LOJA).limit(1).fetchOneInto(Long.class);
-        JsonNode perfilLojista = lerJson(mockMvc.perform(get("/api/identidade/pessoas/{id}", idLojista))
+        JsonNode perfilLojista = lerJson(mockMvc.perform(get("/api/identidade/pessoas/{id}", idLojista).header("X-User-Id", idLojista))
                 .andExpect(status().isOk()));
 
         ObjectNode semLojista = paraRequest(perfilLojista);
@@ -267,6 +295,23 @@ class IdentidadeIntegrationTest {
         editar(idLojista, semLojista)
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value(containsString("RR01")));
+
+        Long idEntregador = dsl.select(ROTA.ID_ENTREGADOR).from(ROTA).limit(1).fetchOneInto(Long.class);
+        assertThat(idEntregador).isNotNull();
+        JsonNode perfilEntregador = lerJson(mockMvc.perform(get("/api/identidade/pessoas/{id}", idEntregador).header("X-User-Id", idEntregador))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.restricoes.entregadorComRotas").value(true)));
+
+        ObjectNode semEntregador = paraRequest(perfilEntregador);
+        semEntregador.put("entregador", false);
+        semEntregador.putNull("tipoVeiculo");
+        if (!semEntregador.get("cliente").asBoolean() && !semEntregador.get("lojista").asBoolean()) {
+            semEntregador.put("cliente", true);
+            ArrayNode enderecos = objectMapper.createArrayNode();
+            enderecos.add(enderecoNovo("Rua Teste Entregador", "10", "36010000", true));
+            semEntregador.set("enderecos", enderecos);
+        }
+        editar(idEntregador, semEntregador).andExpect(status().isUnprocessableEntity());
     }
 
     // ------------------------------------------------------------------ apoio
@@ -279,6 +324,7 @@ class IdentidadeIntegrationTest {
 
     private ResultActions editar(long idPessoa, ObjectNode payload) throws Exception {
         return mockMvc.perform(put("/api/identidade/pessoas/{id}", idPessoa)
+                .header("X-User-Id", idPessoa)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payload)));
     }

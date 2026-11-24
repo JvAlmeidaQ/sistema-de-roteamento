@@ -1,7 +1,7 @@
 /**
  * Disciplina: DCC061 (Engenharia de Software)
  * Feature Flag: VITE_APP_MODE=full (!isBd)
- * Subdomínio: Identidade e Contato — papéis sobrepostos de Pessoa (ADR-003)
+ * Subdomínio: Identidade e Contato — papéis sobrepostos de Pessoa (RR16)
  */
 import { ROTULO_VEICULO } from '../utils/formatadores'
 

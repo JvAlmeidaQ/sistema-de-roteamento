@@ -2,7 +2,7 @@
  * Disciplina: DCC061 (Engenharia de Software)
  * Subdomínio: Identidade e Contato
  * Implementa: RF01 (criação e edição do perfil de uma Pessoa)
- * Atende: RN10/RR14 (formato de CPF, CNPJ, CEP, UF e telefone), ADR-003 (papéis sobrepostos)
+ * Atende: RN10/RR14 (formato de CPF, CNPJ, CEP, UF e telefone), RR16 (papéis sobrepostos)
  */
 package br.ufjf.dcc.entregas.features.identidade.dto;
 
@@ -44,9 +44,11 @@ public record PerfilRequest(
         String tipoVeiculo,
 
         @NotNull(message = "Lista de telefones é obrigatória.")
+        @Size(max = 20, message = "É permitido cadastrar no máximo 20 telefones.")
         List<@Valid @NotNull Telefone> telefones,
 
         @NotNull(message = "Lista de endereços é obrigatória.")
+        @Size(max = 20, message = "É permitido cadastrar no máximo 20 endereços.")
         List<@Valid @NotNull Endereco> enderecos,
 
         /** Obrigatória quando a pessoa passa a ser Lojista e ainda não possui loja (RR01). */
@@ -67,9 +69,10 @@ public record PerfilRequest(
      * Vínculo Pessoa ↔ Endereço. Com {@code idEndereco} preenchido, referencia um vínculo já existente
      * e apenas apelido/complemento/referência são considerados (RR12: Endereco é imutável).
      * Sem {@code idEndereco}, os dados de localização são obrigatórios e o endereço é reaproveitado
-     * se já existir com o mesmo logradouro, número e CEP (ADR-002).
+     * se já existir com o mesmo logradouro, número e CEP (RR12).
      */
     public record Endereco(
+            @Positive(message = "Identificador de endereço deve ser positivo.")
             Long idEndereco,
 
             @Size(max = 150, message = "Logradouro não pode exceder 150 caracteres.")

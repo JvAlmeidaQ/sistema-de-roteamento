@@ -2,7 +2,7 @@
  * Disciplina: DCC061 (Engenharia de Software)
  * Feature Flag: VITE_APP_MODE=full (!isBd)
  * Subdomínio: Identidade e Contato — RF01
- * Espelha no cliente as regras do PerfilService: RN10, RN11, RR01, RR14, RR16, RR17 e ADR-002.
+ * Espelha no cliente as regras do PerfilService: RN10, RN11, RR01, RR03, RR12, RR14, RR16 e RR17.
  */
 import { z } from 'zod'
 import { cnpjValido, cpfValido, soDigitos } from '../utils/formatadores'
@@ -125,9 +125,10 @@ export const perfilSchema = z
       if (!Number.isInteger(tempo) || tempo <= 0) {
         erro([...base, 'tempoEntregaEstimado'], 'RR13: tempo em minutos, maior que zero.')
       }
-      const taxa = Number(loja.taxaEntrega.replace(',', '.'))
-      if (loja.taxaEntrega.trim() === '' || Number.isNaN(taxa) || taxa < 0) {
-        erro([...base, 'taxaEntrega'], 'RR13: a taxa não pode ser negativa.')
+      const taxaTexto = loja.taxaEntrega.trim()
+      const taxa = Number(taxaTexto.replace(',', '.'))
+      if (!/^\d{1,10}([.,]\d{1,2})?$/.test(taxaTexto) || Number.isNaN(taxa) || taxa < 0) {
+        erro([...base, 'taxaEntrega'], 'RR13: informe uma taxa não negativa com até 2 casas decimais.')
       }
     }
   })
