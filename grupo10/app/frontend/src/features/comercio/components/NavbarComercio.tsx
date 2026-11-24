@@ -51,9 +51,14 @@ export function NavbarComercio() {
             Novo Pedido (RF02)
           </NavLink>
           {!isBd && (
-            <NavLink to="/pedidos" className={linkClass}>
-              Gestão de Pedidos (RF03–RF09)
-            </NavLink>
+            <>
+              <NavLink to="/pedidos" className={linkClass}>
+                Gestão de Pedidos (RF03–RF09)
+              </NavLink>
+              <NavLink to="/catalogo" className={linkClass}>
+                Painel do Lojista (UC2)
+              </NavLink>
+            </>
           )}
           <NavLink to="/relatorios" className={linkClass}>
             Relatórios Financeiros (RF10)

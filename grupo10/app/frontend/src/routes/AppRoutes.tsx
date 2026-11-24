@@ -10,6 +10,13 @@ import { NovoPedidoPage } from '@/features/comercio/components/NovoPedidoPage'
 import { RelatoriosFinanceirosPage } from '@/features/comercio/components/RelatoriosFinanceirosPage'
 
 const isBd = import.meta.env.VITE_APP_MODE === 'bd'
+const PainelLojistaPage = !isBd
+  ? lazy(() =>
+      import('@/features/catalogo/components/PainelLojistaPage').then((m) => ({
+        default: m.PainelLojistaPage,
+      })),
+    )
+  : null
 const PainelEntregadorPage = !isBd
   ? lazy(() => import('@/features/logistica/components/PainelEntregadorPage'))
   : null
@@ -26,6 +33,16 @@ export function AppRoutes() {
           <Route path="/" element={<NovoPedidoPage />} />
           <Route path="/relatorios" element={<RelatoriosFinanceirosPage />} />
           {!isBd && <Route path="/pedidos" element={<GestaoPedidosPage />} />}
+          {PainelLojistaPage && (
+            <Route
+              path="/catalogo"
+              element={(
+                <Suspense fallback={<p role="status">Carregando painel do lojista…</p>}>
+                  <PainelLojistaPage />
+                </Suspense>
+              )}
+            />
+          )}
           {PainelEntregadorPage && (
             <Route
               path="/painel-entregador"
