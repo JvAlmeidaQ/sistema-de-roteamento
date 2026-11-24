@@ -97,7 +97,7 @@ export function usePainelEntregador() {
       setPainel(null)
       setPaginas(consulta)
       if (statusHttp(e) === 403) {
-        setErro('A conta selecionada não tem permissão para esta operação de Logística. Confira a conta no menu de sessão.')
+        setErro('Você não tem permissão para acessar o painel de entregas.')
       } else if (e instanceof ZodError) {
         setErro('O servidor retornou dados inválidos para o painel. Tente novamente em Atualizar painel.')
       } else {
